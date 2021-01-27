@@ -23,23 +23,11 @@ const port = 8888;
 (function () {
 
     // 单例应用程序
-    if (false && !app.requestSingleInstanceLock()) {
+    if (!app.requestSingleInstanceLock()) {
         app.quit()
         return
     }
-    app.on('second-instance', (event, argv, cwd) => {
-        const [win] = BrowserWindow.getAllWindows();
-        console.log(win)
-        if (win) {
-            if (win.isMinimized()) {
-                win.restore()
-            }
-            win.show()
-            win.focus()
-        } else {
-            app.quit();
-        }
-    });
+
     process.on('uncaughtException', (err, origin) => {
         logger.error(`uncaughtException: ${err} | ${origin}`)
     });
@@ -80,23 +68,27 @@ const port = 8888;
                 res.status(404).send('WebURL is empty');
                 return;
             }
-            const win = CreateDefaultWin();
+            const win = CreateDefaultWin({ webPreferences: { offscreen: true } });
             win.webContents.once('ipc-message', function (e,channel) {
-                if(channel != 'pdf-render-finish') return
+                if(channel != 'pdf-render-finish') return;
                 win.webContents.printToPDF({
                     printBackground:true,
                     marginsType: 0,
                     printSelectionOnly: false,
+                    landscape: false,
                     pageSize: 'A4',
                     scaleFactor: 100
                 }).then(data => {
-                    const file = Date.now() + '.pdf'
-                    const pdfPath = path.join(__dirname, 'pdf',file );
-                    !fs.existsSync(path.join(__dirname,'pdf')) && fs.mkdir(path.join(__dirname,'pdf'))
+                    console.log('----success----')
+                    const _dir = path.join(__dirname,'pdf')
+                    const _file = Date.now() + '.pdf'
+                    const pdfPath = path.join(_dir,_file);
+                    console.log(_dir)
+                    !fs.existsSync(_dir) && fs.mkdirSync(_dir)
                     fs.writeFile(pdfPath, data, (error) => {
                         if (error) throw error
                         console.log(`Wrote PDF successfully to ${pdfPath}`)
-                        res.send(`pdf/${file}`);
+                        res.send(`pdf/${_file}`);
                         win.close();
                     });
                 }).catch(error => {
@@ -119,11 +111,20 @@ const port = 8888;
     });
 })();
 
+function MergeObject(a, b) {
+    let c = JSON.parse(JSON.stringify(a))
+    for (const key in b) {
+        if (Object.hasOwnProperty.call(b, key)) {
+            c[key] = (typeof b[key] == 'object' && c[key] && typeof c[key] == 'object') ? MergeObject(c[key],b[key]) : b[key]
+        }
+    }
+    return c;
+}
+
 function CreateDefaultWin(options) {
     let opt = {
         width: 1280,
         height: 720,
-        backgroundColor: '#ff2e2c29',
         skipTaskbar: false,
         transparent: false,
         frame: false,
@@ -138,13 +139,10 @@ function CreateDefaultWin(options) {
         show:false
     };
     if (options) {
-        for (const key in options) {
-            if (Object.hasOwnProperty.call(options, key)) {
-                opt[key] = options[key];
-            }
-        }
+        opt = MergeObject(opt,options)
     }
     let win = new BrowserWindow(opt);
     win.setMenu(null);
+    isDev && win.webContents.openDevTools()
     return win;
 }

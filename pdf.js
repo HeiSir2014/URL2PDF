@@ -43,10 +43,10 @@ main.controller('printMain', [
 			   $scope.$apply();
 			   
 			   try {
-				   
-					const {ipcRenderer} = require('electron')
+					const {ipcRenderer} = require('electron');
 					ipcRenderer.send('pdf-render-finish')
 			   } catch (error) {
+				   console.log(error)
 			   }
 			});
 
