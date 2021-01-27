@@ -92,6 +92,7 @@ const port = 8888;
                 }).then(data => {
                     const file = Date.now() + '.pdf'
                     const pdfPath = path.join(__dirname, 'pdf',file );
+                    !fs.existsSync(path.join(__dirname,'pdf')) && fs.mkdir(path.join(__dirname,'pdf'))
                     fs.writeFile(pdfPath, data, (error) => {
                         if (error) throw error
                         console.log(`Wrote PDF successfully to ${pdfPath}`)
@@ -100,7 +101,7 @@ const port = 8888;
                     });
                 }).catch(error => {
                     res.send('503');
-                    console.log(`Failed to write PDF to ${pdfPath}: `, error)
+                    console.log(`Failed to write PDF to `, error)
                     win.close();
                 });
             })
