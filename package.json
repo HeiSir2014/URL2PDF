@@ -1,0 +1,112 @@
+{
+  "name": "url2pdf",
+  "version": "1.0.0",
+  "description": "url / html convert pdf file",
+  "main": "main.js",
+  "devDependencies": {
+    "electron": "^11.2.0",
+    "electron-builder": "^22.9.1"
+  },
+  "dependencies": {
+    "electron-is-dev": "^1.2.0",
+    "express": "^4.17.1",
+    "winston": "^3.3.3"
+  },
+  "scripts": {
+    "start": "electron .",
+    "startDebug": "electron . --inspect-brk",
+    "pack-mac": "electron-builder --mac --publish always",
+    "pack-win": "electron-builder --win --publish always",
+    "postinstall": "electron-builder install-app-deps",
+    "pack-linux": "electron-builder --linux --publish always",
+    "windows-latest": "npm run pack-win",
+    "macos-latest": "npm run pack-mac",
+    "ubuntu-latest": "npm run pack-linux"
+  },
+  "build": {
+    "appId": "cn.heisir.url2pdf",
+    "artifactName": "URL2PDF-${os}_${arch}-v${version}.${ext}",
+    "electronVersion": "11.2.0",
+    "copyright": "Copyright © 2021 ${author}",
+    "compression": "normal",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "**/*",
+      "!dist/*",
+      "!.github/*",
+      "!README.md",
+      "!.gitignore"
+    ],
+    "asar": true,
+    "win": {
+      "target": [
+        {
+          "target": "nsis"
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64",
+            "ia32"
+          ]
+        }
+      ],
+      "icon": "static/icon/logo-512.png"
+    },
+    "dmg": {
+      "window": {
+        "width": 540,
+        "height": 380
+      },
+      "contents": [
+        {
+          "x": 410,
+          "y": 230,
+          "type": "link",
+          "path": "/Applications"
+        },
+        {
+          "x": 130,
+          "y": 230,
+          "type": "file"
+        }
+      ]
+    },
+    "mac": {
+      "hardenedRuntime": true,
+      "appId": "cn.heisir.url2pdf-mac",
+      "category": "public.app-category.productivity",
+      "target": [
+        "dmg"
+      ],
+      "icon": "static/icon/logo.icns"
+    },
+    "nsis": {
+      "perMachine": true,
+      "oneClick": false,
+      "allowElevation": true,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "static/icon/logo.ico",
+      "uninstallerIcon": "static/icon/logo.ico",
+      "installerHeaderIcon": "static/icon/logo.ico",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "URL2PDF"
+    },
+    "appImage": {
+      "category": "public.app-category.productivity"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "maintainer": "heisir <heisir21@163.com>",
+      "category": "Utility"
+    }
+  },
+  "author": "heisir",
+  "license": "MIT"
+}
