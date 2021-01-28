@@ -16,9 +16,12 @@ const {
 const isDev = require('electron-is-dev');
 const package_self = require('./package.json');
 const express = require('express');
-const appSvr = express();
+let appSvr = express();
+let httpServer;
 let timeouts = {};
 let dbHandle = {};
+let mainWindow;
+let pdfCount = 0;
 
 (function () {
 
@@ -38,7 +41,6 @@ let dbHandle = {};
     app.on('ready', async () => {
         localConfig = path.join(app.getPath('userData'), 'config.json');
 
-        const param = getStartParam();
         logger = winston.createLogger({
             level: 'debug',
             format: winston.format.combine(
@@ -59,6 +61,85 @@ let dbHandle = {};
             ],
         });
 
+        mainWindow = CreateDefaultWin({width:400,height:200,frame:true,resizable:false})
+        mainWindow.loadFile(path.join("static","server.html"));
+        mainWindow.webContents.on("dom-ready",()=>{
+            if(fs.existsSync(localConfig))
+            {
+                const config = JSON.parse(fs.readFileSync(localConfig))
+                mainWindow.webContents.send("message",{port:config.port||8080})
+            }
+        });
+
+        mainWindow.webContents.on("ipc-message",(e,channel,data)=>{
+            if(channel == 'start')
+            {
+                try {
+                    httpServer && httpServer.close();
+                } catch (_) {}
+                httpServer = appSvr.listen(Number.parseInt(data.port) , function (e) {
+                    logger.info(`server start success on ${data.port}`);
+                    appSvr.get('/api/Url2PDF/', apiHandle);
+                    mainWindow.webContents.send("message",{status:"服务正在运行...",success:true})
+                    let config = fs.existsSync(localConfig) ? JSON.parse(fs.readFileSync(localConfig)):{};
+                    config['port'] = data.port;
+                    fs.writeFileSync(localConfig,JSON.stringify(config));
+                });
+                httpServer.on('error',function(e){
+                    logger.error(e)
+
+                    e.code == 'EACCES' && mainWindow.webContents.send("message",{status:"端口被占用",fail:true});
+                });
+                return;
+            }
+            if(channel == 'stop')
+            {
+                httpServer && httpServer.close();
+                mainWindow.webContents.send("message",{status:"服务停止运行"})
+            }
+        });
+
+        mainWindow.on('close',function(e){
+            mainWindow && e.preventDefault()
+            mainWindow && mainWindow.hide()
+        })
+        mainWindow.on('closed',()=> mainWindow=null );
+
+
+        tray = new Tray(path.join(__dirname, 'static/icon/logo.png'))
+        tray.setTitle("URL2PDF 服务");
+        tray.setToolTip("URL2PDF 服务");
+        tray.on("double-click", () => {
+            
+            if (mainWindow.isMinimized()) {
+                mainWindow.restore()
+            }
+            mainWindow.show()
+            mainWindow.focus()
+        });
+        const contextMenu = Menu.buildFromTemplate([
+            {
+                label: '显示窗口',
+                type: 'normal',
+                click: () => {
+                    mainWindow.show();
+                }
+            },
+            {
+                type: 'separator'
+            },
+            {
+                label: '退出URL2PDF',
+                type: 'normal',
+                click: () => {
+                    mainWindow = null;
+                    BrowserWindow.getAllWindows().forEach(win => win.close())
+                    app.quit()
+                }
+            }
+        ]);
+        tray.setContextMenu(contextMenu);
+
         async function timeoutResp(webContentsId)
         {
             let res = dbHandle[webContentsId];  res && (delete dbHandle[webContentsId]);
@@ -68,7 +149,6 @@ let dbHandle = {};
                 win && win.close();
                 return;
             };
-            console.log('timeoutResp',webContentsId)
             try{
                 const pdfData = await content.printToPDF({
                     printBackground: true,
@@ -81,6 +161,8 @@ let dbHandle = {};
                 res.set('Content-Type', 'application/pdf');
                 res.end(pdfData);
                 res = null;
+                pdfCount = pdfCount + 1
+                mainWindow && mainWindow.webContents.send("message",{log:`共计：已生成 ${pdfCount} 个PDF`})
             }
             catch(error){
                 console.log(error)
@@ -92,7 +174,7 @@ let dbHandle = {};
         }
 
         function webRequestReq(details, callback){
-            if(!details.webContentsId) {
+            if(!details.webContentsId || details.webContentsId  == mainWindow.webContents.id) {
                 callback({cancel:false});return
             }
             const id = details.webContentsId;
@@ -101,7 +183,7 @@ let dbHandle = {};
         };
 
         function webRequestRsp(details){
-            if(!details.webContentsId) {
+            if(!details.webContentsId || details.webContentsId  == mainWindow.webContents.id) {
                 return
             }
             const id = details.webContentsId;
@@ -109,20 +191,14 @@ let dbHandle = {};
         }
         
         function webRequestRspCompleted(details){
-            if(!details.webContentsId) {return}
+            if(!details.webContentsId || details.webContentsId  == mainWindow.webContents.id) {return}
             const id = details.webContentsId;
 
             timeouts[id] && (clearTimeout(timeouts[id]),delete timeouts[id]);
             timeouts[id] = setTimeout( timeoutResp,500,id );
         }
-        
-        session.defaultSession.webRequest.onBeforeRequest(webRequestReq);
-        session.defaultSession.webRequest.onResponseStarted(webRequestRsp);
-        session.defaultSession.webRequest.onCompleted(webRequestRspCompleted);
 
-        logger.info('load success');
-
-        appSvr.get('/api/Url2PDF/', function (req, res) {
+        function apiHandle(req, res) {
             const WebURL = req.query['WebURL'];
             if (!WebURL) {
                 res.status(404).send('WebURL is empty');
@@ -131,15 +207,18 @@ let dbHandle = {};
             const win = CreateDefaultWin({width:1,height:1, webPreferences: { offscreen: true } ,show:false});
             win.loadURL(WebURL);
             dbHandle[win.webContents.id] = res;
-        });
+        }
 
-        appSvr.listen(param.port, function (e) {
-            logger.info(`server start success on ${param.port}`);
-        });
+        
+        session.defaultSession.webRequest.onBeforeRequest(webRequestReq);
+        session.defaultSession.webRequest.onResponseStarted(webRequestRsp);
+        session.defaultSession.webRequest.onCompleted(webRequestRspCompleted);
+
+        logger.info('load success');
     });
 
     app.on('window-all-closed', () => {
-        //app.quit()
+        app.quit()
     });
 })();
 
