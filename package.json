@@ -1,6 +1,6 @@
 {
   "name": "url2pdf",
-  "version": "1.0.1",
+  "version": "2.0.1",
   "description": "url / html convert pdf file",
   "main": "main.js",
   "devDependencies": {
@@ -13,7 +13,7 @@
     "winston": "^3.3.3"
   },
   "scripts": {
-    "start": "electron . --port=8080",
+    "start": "electron .",
     "startDebug": "electron . --inspect-brk",
     "pack-mac": "electron-builder --mac --publish always",
     "pack-win": "electron-builder --win --publish always",
