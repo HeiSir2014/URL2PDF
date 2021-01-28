@@ -35,9 +35,9 @@ jobs:
       with:
         name: dist
         path: |
-          dist/URL2PDF--*
-          !dist/URL2PDF-*.blockmap
-          !dist/latest*.yml
+          dist/URL2PDF-*
+          !dist/*.blockmap
+          !dist/*.yml
       env:
         GITHUB_TOKEN: ${{ secrets.ACCESS_TOKEN }}
         GH_TOKEN: ${{ secrets.ACCESS_TOKEN }}
