@@ -17,8 +17,8 @@ const isDev = require('electron-is-dev');
 const package_self = require('./package.json');
 const express = require('express');
 const appSvr = express();
-const port = 8888;
-
+let timeouts = {};
+let dbHandle = {};
 
 (function () {
 
@@ -37,6 +37,8 @@ const port = 8888;
 
     app.on('ready', async () => {
         localConfig = path.join(app.getPath('userData'), 'config.json');
+
+        const param = getStartParam();
         logger = winston.createLogger({
             level: 'debug',
             format: winston.format.combine(
@@ -57,59 +59,104 @@ const port = 8888;
             ],
         });
 
-        session.defaultSession.webRequest.onBeforeRequest({urls:['*://*/*bridge-service/pdf.js*']},(details, callback)=>{
-            callback({cancel:false,redirectURL:`http://127.0.0.1:${port}/pdf.js`})
-        })
+        async function timeoutResp(webContentsId)
+        {
+            let res = dbHandle[webContentsId];  res && (delete dbHandle[webContentsId]);
+            const content = webContents.fromId(webContentsId);
+            const win = content?BrowserWindow.fromWebContents(content):null;
+            if(res == null) {
+                win && win.close();
+                return;
+            };
+            console.log('timeoutResp',webContentsId)
+            try{
+                const pdfData = await content.printToPDF({
+                    printBackground: true,
+                    marginsType: 1,
+                    printSelectionOnly: false,
+                    landscape: false,
+                    pageSize: 'A4',
+                    scaleFactor: 70
+                });
+                res.set('Content-Type', 'application/pdf');
+                res.end(pdfData);
+                res = null;
+            }
+            catch(error){
+                console.log(error)
+            }
+            finally{
+                res && res.status(404).send();
+                win && win.close();
+            }
+        }
+
+        function webRequestReq(details, callback){
+            if(!details.webContentsId) {
+                callback({cancel:false});return
+            }
+            const id = details.webContentsId;
+            timeouts[id] && (clearTimeout(timeouts[id]),delete timeouts[id]);
+            callback({cancel:false});
+        };
+
+        function webRequestRsp(details){
+            if(!details.webContentsId) {
+                return
+            }
+            const id = details.webContentsId;
+            timeouts[id] && (clearTimeout(timeouts[id]),delete timeouts[id]);
+        }
+        
+        function webRequestRspCompleted(details){
+            if(!details.webContentsId) {return}
+            const id = details.webContentsId;
+
+            timeouts[id] && (clearTimeout(timeouts[id]),delete timeouts[id]);
+            timeouts[id] = setTimeout( timeoutResp,500,id );
+        }
+        
+        session.defaultSession.webRequest.onBeforeRequest(webRequestReq);
+        session.defaultSession.webRequest.onResponseStarted(webRequestRsp);
+        session.defaultSession.webRequest.onCompleted(webRequestRspCompleted);
 
         logger.info('load success');
+
         appSvr.get('/api/Url2PDF/', function (req, res) {
             const WebURL = req.query['WebURL'];
             if (!WebURL) {
                 res.status(404).send('WebURL is empty');
                 return;
             }
-            const win = CreateDefaultWin({ webPreferences: { offscreen: true } });
-            win.webContents.once('ipc-message', function (e,channel) {
-                if(channel != 'pdf-render-finish') return;
-                win.webContents.printToPDF({
-                    printBackground:true,
-                    marginsType: 0,
-                    printSelectionOnly: false,
-                    landscape: false,
-                    pageSize: 'A4',
-                    scaleFactor: 100
-                }).then(data => {
-                    console.log('----success----')
-                    const _dir = path.join(__dirname,'pdf')
-                    const _file = Date.now() + '.pdf'
-                    const pdfPath = path.join(_dir,_file);
-                    console.log(_dir)
-                    !fs.existsSync(_dir) && fs.mkdirSync(_dir)
-                    fs.writeFile(pdfPath, data, (error) => {
-                        if (error) throw error
-                        console.log(`Wrote PDF successfully to ${pdfPath}`)
-                        res.send(`pdf/${_file}`);
-                        win.close();
-                    });
-                }).catch(error => {
-                    res.send('503');
-                    console.log(`Failed to write PDF to `, error)
-                    win.close();
-                });
-            })
+            const win = CreateDefaultWin({width:1,height:1, webPreferences: { offscreen: true } ,show:false});
             win.loadURL(WebURL);
+            dbHandle[win.webContents.id] = res;
         });
 
-        appSvr.listen(port, function (e) {
-            logger.info(`server start success on ${port}`);
+        appSvr.listen(param.port, function (e) {
+            logger.info(`server start success on ${param.port}`);
         });
-        appSvr.use(express.static(__dirname));
     });
 
     app.on('window-all-closed', () => {
         //app.quit()
     });
 })();
+
+function getStartParam()
+{
+    let param = {
+        port: 8080
+    };
+    process.argv.forEach(arg => {
+        let _ = null;
+        if((_ = arg.match(/^--(.*)=([^=]*)$/)) && _.length > 2)
+        {
+            param[ _[1] ]=_[2];
+        }
+    });
+    return param;
+}
 
 function MergeObject(a, b) {
     let c = JSON.parse(JSON.stringify(a))
@@ -136,13 +183,12 @@ function CreateDefaultWin(options) {
         },
         alwaysOnTop: false,
         hasShadow: false,
-        show:false
     };
     if (options) {
         opt = MergeObject(opt,options)
     }
     let win = new BrowserWindow(opt);
     win.setMenu(null);
-    isDev && win.webContents.openDevTools()
+    opt['show'] != false && isDev && win.webContents.openDevTools()
     return win;
 }
