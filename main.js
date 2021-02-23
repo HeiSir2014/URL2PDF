@@ -2,6 +2,7 @@ const os = require('os');
 const path = require('path');
 const fs = require('fs');
 const winston = require('winston');
+const crypto = require('crypto');
 const {
     app,
     BrowserWindow,
@@ -150,16 +151,28 @@ let pdfCount = 0;
                 return;
             };
             try{
-                const pdfData = await content.printToPDF({
-                    printBackground: true,
-                    marginsType: 1,
-                    printSelectionOnly: false,
-                    landscape: false,
-                    pageSize: 'A4',
-                    scaleFactor: 70
-                });
-                res.set('Content-Type', 'application/pdf');
-                res.end(pdfData);
+                const pdfDir = path.join( path.dirname(process.execPath),'pdfOuts');
+                if( !fs.existsSync(pdfDir) )
+                {
+                    fs.mkdirSync(pdfDir)
+                }
+                const md5 =  crypto.createHash('md5').update(content.getURL()).digest('hex');
+                const pdfFile = path.join(pdfDir,`${md5}.pdf`);
+                if( !fs.existsSync(pdfFile) )
+                {
+                    const pdfData = await content.printToPDF({
+                        printBackground: true,
+                        marginsType: 1,
+                        printSelectionOnly: false,
+                        landscape: false,
+                        pageSize: 'A4',
+                        scaleFactor: 70
+                    });
+                    fs.writeFileSync(pdfFile,pdfData);
+                }
+                //res.set('Content-Type', 'application/pdf');
+                res.set('Content-Type', 'text/html; charset=UTF-8');
+                res.end(pdfFile);
                 res = null;
                 pdfCount = pdfCount + 1
                 mainWindow && mainWindow.webContents.send("message",{log:`共计：已生成 ${pdfCount} 个PDF`})
@@ -204,6 +217,21 @@ let pdfCount = 0;
                 res.status(404).send('WebURL is empty');
                 return;
             }
+
+            const pdfDir = path.join( path.dirname(process.execPath),'pdfOuts');
+            if( !fs.existsSync(pdfDir) )
+            {
+                fs.mkdirSync(pdfDir)
+            }
+            const md5 =  crypto.createHash('md5').update(WebURL).digest('hex');
+            const pdfFile = path.join(pdfDir,`${md5}.pdf`);
+            if( fs.existsSync(pdfFile) )
+            {
+                res.set('Content-Type', 'text/html; charset=UTF-8');
+                res.end(pdfFile);
+                return;
+            }
+
             const win = CreateDefaultWin({width:1,height:1, webPreferences: { offscreen: true } ,show:false});
             win.loadURL(WebURL);
             dbHandle[win.webContents.id] = res;
