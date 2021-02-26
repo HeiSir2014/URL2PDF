@@ -44,6 +44,10 @@
             margin-left: 40px;
         }
 
+        .line button.dir{
+            width: 120px;
+        }
+
         .line .port{
             height: 100%;
             line-height: 32px;
@@ -87,6 +91,10 @@
             <button class="stop" disabled>停止</button>
             <button class="start">开始</button>  
         </div>
+        <div class="line">
+            <button class="dir openPdf">打开PDF目录</button>
+            <button class="dir openLog">打开日志目录</button>  
+        </div>
         <div class="line status">服务未启动</div>
         <div class="line log">共计：已生成 0 个PDF</div>
         <div class="line tip">窗口关闭后，会自动隐藏到系统托盘中。</div>
@@ -97,6 +105,8 @@
         const portInput = document.querySelector('.port');
         const start = document.querySelector('.start');
         const stop = document.querySelector('.stop');
+        const openPdf = document.querySelector('.openPdf');
+        const openLog = document.querySelector('.openLog');
         const statusDiv = document.querySelector('.status');
         const logDiv = document.querySelector('.log');
 
@@ -122,6 +132,12 @@
 
             start.disabled = false;
             stop.disabled = true;
+        }
+        openPdf.onclick = function(){
+            ipcRenderer.send("openPDF");
+        }
+        openLog.onclick = function(){
+            ipcRenderer.send("openLog");
         }
     </script>
 </body>

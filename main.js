@@ -17,6 +17,8 @@ const {
 const isDev = require('electron-is-dev');
 const package_self = require('./package.json');
 const express = require('express');
+const bodyParser = require('body-parser');
+const morgan  = require('morgan');
 let appSvr = express();
 let httpServer;
 let timeouts = {};
@@ -62,7 +64,7 @@ let pdfCount = 0;
             ],
         });
 
-        mainWindow = CreateDefaultWin({width:400,height:200,frame:true,resizable:false})
+        mainWindow = CreateDefaultWin({width:400,height:250,frame:true,resizable:false})
         mainWindow.loadFile(path.join("static","server.html"));
         mainWindow.webContents.on("dom-ready",()=>{
             if(fs.existsSync(localConfig))
@@ -71,6 +73,40 @@ let pdfCount = 0;
                 mainWindow.webContents.send("message",{port:config.port||8080})
             }
         });
+        appSvr.use(function (req, res, next) {
+            req.headers['content-encoding'] && delete req.headers['content-encoding']
+            req.headers['Content-Encoding'] && delete req.headers['Content-Encoding']
+            next()
+        })
+        appSvr.use(bodyParser.urlencoded({ extended: true }));
+        appSvr.use(bodyParser.json());
+        appSvr.use(bodyParser.raw());
+        appSvr.use(morgan({
+            "format": "default",
+            "stream": {
+              write: function(str) { logger.debug(str); }
+            }
+        }));
+        appSvr.use((err, req, res, next)=>{
+            logger.error(err.stack)
+            next(err)
+        })
+
+        function showDirInExplorer(dir)
+        {
+            shell.openExternal(dir).catch((reason)=>{
+                logger.error(`openExternal Error:${dir} ${reason}`);
+                
+                let files = fs.readdirSync(dir);
+                if(files && files.length > 0)
+                {
+                    shell.showItemInFolder(path.join(dir,files[0]));
+                }
+                else{
+                    shell.showItemInFolder(dir);
+                }
+            });
+        }
 
         mainWindow.webContents.on("ipc-message",(e,channel,data)=>{
             if(channel == 'start')
@@ -81,6 +117,7 @@ let pdfCount = 0;
                 httpServer = appSvr.listen(Number.parseInt(data.port) , function (e) {
                     logger.info(`server start success on ${data.port}`);
                     appSvr.get('/api/Url2PDF/', apiHandle);
+                    appSvr.post('/api/Url2PDF/', apiHandle);
                     mainWindow.webContents.send("message",{status:"服务正在运行...",success:true})
                     let config = fs.existsSync(localConfig) ? JSON.parse(fs.readFileSync(localConfig)):{};
                     config['port'] = data.port;
@@ -96,7 +133,20 @@ let pdfCount = 0;
             if(channel == 'stop')
             {
                 httpServer && httpServer.close();
-                mainWindow.webContents.send("message",{status:"服务停止运行"})
+                mainWindow.webContents.send("message",{status:"服务停止运行"});
+                return;
+            }
+            if(channel == 'openPDF')
+            {
+                const pdfDir = path.join( path.dirname(process.execPath),'pdfOuts');
+                showDirInExplorer(pdfDir);
+                return;
+            }
+            if(channel == 'openLog')
+            {
+                const logDir = path.join(app.getPath('userData'), 'logs')
+                showDirInExplorer(logDir);
+                return;
             }
         });
 
@@ -171,11 +221,12 @@ let pdfCount = 0;
                     fs.writeFileSync(pdfFile,pdfData);
                 }
                 //res.set('Content-Type', 'application/pdf');
-                res.set('Content-Type', 'text/html; charset=UTF-8');
-                res.end(pdfFile);
+                
+                res.set('Content-Type', 'application/json; charset=UTF-8');
+                res.end( JSON.stringify({"ErrCode":0,"ErrInfo":"SUCCESS","PDFPath":pdfFile}) );
                 res = null;
-                pdfCount = pdfCount + 1
-                mainWindow && mainWindow.webContents.send("message",{log:`共计：已生成 ${pdfCount} 个PDF`})
+                pdfCount += 1
+                mainWindow && mainWindow.webContents.send("message",{log:`共计：已处理 ${pdfCount} 个请求`})
             }
             catch(error){
                 console.log(error)
@@ -208,14 +259,18 @@ let pdfCount = 0;
             const id = details.webContentsId;
 
             timeouts[id] && (clearTimeout(timeouts[id]),delete timeouts[id]);
-            timeouts[id] = setTimeout( timeoutResp,500,id );
+            timeouts[id] = setTimeout( timeoutResp,1000,id );
         }
 
         function apiHandle(req, res) {
-            const WebURL = req.query['WebURL'];
+            let WebURL = req.query['WebURL'];
+            logger.debug( JSON.stringify(req.query) + " | " + JSON.stringify(req.body) );
             if (!WebURL) {
-                res.status(404).send('WebURL is empty');
-                return;
+                WebURL = req.body.WebURL;
+                if (!WebURL) {
+                    res.status(200).send('WebURL is empty');
+                    return;
+                }
             }
 
             const pdfDir = path.join( path.dirname(process.execPath),'pdfOuts');
@@ -227,8 +282,10 @@ let pdfCount = 0;
             const pdfFile = path.join(pdfDir,`${md5}.pdf`);
             if( fs.existsSync(pdfFile) )
             {
-                res.set('Content-Type', 'text/html; charset=UTF-8');
-                res.end(pdfFile);
+                pdfCount += 1
+                mainWindow && mainWindow.webContents.send("message",{log:`共计：已处理 ${pdfCount} 个请求`})
+                res.set('Content-Type', 'application/json; charset=UTF-8');
+                res.end( JSON.stringify({"ErrCode":0,"ErrInfo":"SUCCESS","PDFPath":pdfFile}) );
                 return;
             }
 
