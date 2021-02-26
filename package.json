@@ -1,6 +1,6 @@
 {
   "name": "url2pdf",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "description": "url / html convert pdf file",
   "main": "main.js",
   "devDependencies": {
