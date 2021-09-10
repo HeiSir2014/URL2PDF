@@ -8,8 +8,8 @@
         html,body{
             width: 100%;
             height: 100%;
-            background-color:#444444;
-            color: #fff;
+            background-color:#fff;
+            color: #000;
             margin: 0;
             padding: 0;
             box-sizing: border-box;
@@ -23,21 +23,41 @@
             box-sizing: border-box;
         }
 
+
+
         .line{
             width: 100%;
             height: 32px;
             line-height: 32px;
-            text-align: left;
+            text-align: center;
             margin: 10px 0;
             box-sizing: border-box;
             vertical-align: middle;
         }
 
+        .line input,.line button{
+            outline: none;
+        }
         .line button{
-            width: 80px;
+            width: 120px;
             height: 100%;
+        }
+
+        .line button.start{
+            background-color: rgb(230, 64, 34);
+            border: solid 0px #aaa;
+            border-radius: 5px;
+            color: #fff;
+        }
+        .line button.stop{
+            background-color: rgb(32, 122, 240);
+            border: solid 0px #aaa;
+            border-radius: 5px;
+            color: #fff;
+        }
+
+        .line button+button{
             margin-right: 20px;
-            float: right;
         }
 
         .line button:first-child{
@@ -46,18 +66,24 @@
 
         .line button.dir{
             width: 120px;
+            background-color: transparent;
+            border: solid 1px #aaa;
+        }
+
+        .line button.dir:hover{
+            background-color: #00000011;
         }
 
         .line .port{
             height: 100%;
             line-height: 32px;
-            width: 80px;
+            width: 50%;
             box-sizing: border-box;
             text-align: center;
         }
 
         .line.status,.line.log{
-            text-align: left;
+            text-align: center;
             font-size: 14px;
         }
 
@@ -87,17 +113,23 @@
 <body>
     <div class="main">
         <div class="line">
-            端口: <input type="number" class="port" value="8080" /> 
-            <button class="stop" disabled>停止</button>
-            <button class="start">开始</button>  
+            请输入端口号：
         </div>
+        <div class="line">
+            <input type="number" class="port" value="8080" />
+        </div>
+        <div class="line">
+            <button class="start">开始</button>  
+            <button class="stop" disabled>停止</button>
+        </div>
+        <div class="line status">服务未启动</div>
+        <div class="line log">共计：已生成 0 个PDF</div>
+        
         <div class="line">
             <button class="dir openPdf">打开PDF目录</button>
             <button class="dir openLog">打开日志目录</button>  
         </div>
-        <div class="line status">服务未启动</div>
-        <div class="line log">共计：已生成 0 个PDF</div>
-        <div class="line tip">窗口关闭后，会自动隐藏到系统托盘中。</div>
+        <div class="line tip">窗口关闭后，会自动隐藏到系统托盘中</div>
     </div>
 
     <script>

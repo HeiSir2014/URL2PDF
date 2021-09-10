@@ -4,12 +4,12 @@
   "description": "url / html convert pdf file",
   "main": "main.js",
   "devDependencies": {
-    "electron": "^11.2.0",
-    "electron-builder": "^22.9.1"
+    "electron": "^14.0.0",
+    "electron-builder": "^22.11.7"
   },
   "dependencies": {
     "body-parser": "^1.19.0",
-    "electron-is-dev": "^1.2.0",
+    "electron-is-dev": "^2.0.0",
     "express": "^4.17.1",
     "morgan": "^1.10.0",
     "winston": "^3.3.3"

@@ -64,7 +64,7 @@ let pdfCount = 0;
             ],
         });
 
-        mainWindow = CreateDefaultWin({width:400,height:250,frame:true,resizable:false})
+        mainWindow = CreateDefaultWin({width:500,height:320,frame:true,resizable:true})
         mainWindow.loadFile(path.join("static","server.html"));
         mainWindow.webContents.on("dom-ready",()=>{
             if(fs.existsSync(localConfig))
@@ -151,6 +151,7 @@ let pdfCount = 0;
         });
 
         mainWindow.on('close',function(e){
+            console.log("close")
             mainWindow && e.preventDefault()
             mainWindow && mainWindow.hide()
         })
@@ -212,11 +213,11 @@ let pdfCount = 0;
                 {
                     const pdfData = await content.printToPDF({
                         printBackground: true,
-                        marginsType: 1,
+                        marginsType: 0,
                         printSelectionOnly: false,
                         landscape: false,
                         pageSize: 'A4',
-                        scaleFactor: 70
+                        scaleFactor: 0
                     });
                     fs.writeFileSync(pdfFile,pdfData);
                 }
@@ -242,6 +243,8 @@ let pdfCount = 0;
                 callback({cancel:false});return
             }
             const id = details.webContentsId;
+            // console.log("webRequestReq")
+            // console.log(details.url)
             timeouts[id] && (clearTimeout(timeouts[id]),delete timeouts[id]);
             callback({cancel:false});
         };
@@ -251,15 +254,18 @@ let pdfCount = 0;
                 return
             }
             const id = details.webContentsId;
+            // console.log("webRequestRsp")
+            // console.log(details.url)
             timeouts[id] && (clearTimeout(timeouts[id]),delete timeouts[id]);
         }
         
         function webRequestRspCompleted(details){
             if(!details.webContentsId || details.webContentsId  == mainWindow.webContents.id) {return}
             const id = details.webContentsId;
-
+            // console.log("webRequestRspCompleted")
+            // console.log(details.url)
             timeouts[id] && (clearTimeout(timeouts[id]),delete timeouts[id]);
-            timeouts[id] = setTimeout( timeoutResp,1000,id );
+            timeouts[id] = setTimeout( timeoutResp,1500,id );
         }
 
         function apiHandle(req, res) {
@@ -289,7 +295,7 @@ let pdfCount = 0;
                 return;
             }
 
-            const win = CreateDefaultWin({width:1,height:1, webPreferences: { offscreen: true } ,show:false});
+            const win = CreateDefaultWin({width:1,height:1, webPreferences: { offscreen: true,nodeIntegration:false,contextIsolation:true } ,show:false});
             win.loadURL(WebURL);
             dbHandle[win.webContents.id] = res;
         }
@@ -343,7 +349,8 @@ function CreateDefaultWin(options) {
         webPreferences: {
             nodeIntegration: true,
             spellcheck: false,
-            webSecurity: !isDev
+            webSecurity: !isDev,
+            contextIsolation:false
         },
         alwaysOnTop: false,
         hasShadow: false,
