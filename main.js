@@ -17,6 +17,7 @@ const {
 const isDev = require('electron-is-dev');
 const package_self = require('./package.json');
 const express = require('express');
+const asyncHandler = require('express-async-handler')
 const bodyParser = require('body-parser');
 const morgan  = require('morgan');
 let appSvr = express();
@@ -117,8 +118,8 @@ let pdfCount = 0;
                 } catch (_) {}
                 httpServer = appSvr.listen(Number.parseInt(data.port) , function (e) {
                     logger.info(`server start success on ${data.port}`);
-                    appSvr.get('/api/Url2PDF/', apiHandle);
-                    appSvr.post('/api/Url2PDF/', apiHandle);
+                    appSvr.get('/api/Url2PDF/', asyncHandler(apiHandle));
+                    appSvr.post('/api/Url2PDF/', asyncHandler(apiHandle));
                     mainWindow.webContents.send("message",{status:"服务正在运行...",success:true})
                     let config = fs.existsSync(localConfig) ? JSON.parse(fs.readFileSync(localConfig)):{};
                     config['port'] = data.port;
@@ -291,9 +292,8 @@ let pdfCount = 0;
             timeouts[id] = setTimeout( timeoutResp,1500,id );
         }
 
-        function apiHandle(req, res) {
+        async function apiHandle(req, res) {
             let WebURL = req.query['WebURL'];
-            logger.debug( JSON.stringify(req.query) + " | " + JSON.stringify(req.body) );
             if (!WebURL) {
                 WebURL = req.body.WebURL;
                 if (!WebURL) {
@@ -334,7 +334,11 @@ let pdfCount = 0;
 
             const win = CreateDefaultWin({width:1,height:1, webPreferences: { offscreen: true,nodeIntegration:false,contextIsolation:true } ,show:false});
             win.loadURL(WebURL);
-            dbHandle[win.webContents.id] = res;
+            dbHandle[win.webContents.id] = true;
+
+            res.set('Content-Type', 'application/json; charset=UTF-8');
+            res.end( JSON.stringify({"ErrCode":-1000,"ErrInfo":"FULL","PDFPath":""}) );
+            return;
         }
 
         
