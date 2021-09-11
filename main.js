@@ -23,6 +23,7 @@ let appSvr = express();
 let httpServer;
 let timeouts = {};
 let dbHandle = {};
+let queueTasks = [];
 let mainWindow;
 let pdfCount = 0;
 
@@ -196,6 +197,7 @@ let pdfCount = 0;
         {
             let res = dbHandle[webContentsId];  res && (delete dbHandle[webContentsId]);
             const content = webContents.fromId(webContentsId);
+            const WebURL = content.getURL();
             const win = content?BrowserWindow.fromWebContents(content):null;
             if(res == null) {
                 win && win.close();
@@ -207,7 +209,7 @@ let pdfCount = 0;
                 {
                     fs.mkdirSync(pdfDir)
                 }
-                const md5 =  crypto.createHash('md5').update(content.getURL()).digest('hex');
+                const md5 =  crypto.createHash('md5').update(WebURL).digest('hex');
                 const pdfFile = path.join(pdfDir,`${md5}.pdf`);
                 if( !fs.existsSync(pdfFile) )
                 {
@@ -223,9 +225,13 @@ let pdfCount = 0;
                 }
                 //res.set('Content-Type', 'application/pdf');
                 
-                res.set('Content-Type', 'application/json; charset=UTF-8');
-                res.end( JSON.stringify({"ErrCode":0,"ErrInfo":"SUCCESS","PDFPath":pdfFile}) );
+                if(res !== true)
+                {
+                    res.set('Content-Type', 'application/json; charset=UTF-8');
+                    res.end( JSON.stringify({"ErrCode":0,"ErrInfo":"SUCCESS","PDFPath":pdfFile}) );
+                }
                 res = null;
+                
                 pdfCount += 1
                 mainWindow && mainWindow.webContents.send("message",{log:`共计：已处理 ${pdfCount} 个请求`})
             }
@@ -235,6 +241,23 @@ let pdfCount = 0;
             finally{
                 res && res.status(404).send();
                 win && win.close();
+                
+                let last = queueTasks.find((item)=> item.WebURL == WebURL);
+                if(last)
+                {
+                    let idx = queueTasks.findIndex((item) => item == last);
+                    idx >= 0 && queueTasks.splice(idx,1);
+                }
+
+                // 查询下一个任务
+                let itr = queueTasks.find((item)=> item.Status == 0)
+                if(!itr) return;
+
+                itr.Status = 1;
+
+                const win_ = CreateDefaultWin({width:1,height:1, webPreferences: { offscreen: true,nodeIntegration:false,contextIsolation:true } ,show:false});
+                win_.loadURL(itr.WebURL);
+                dbHandle[win_.webContents.id] = true;
             }
         }
 
@@ -284,6 +307,7 @@ let pdfCount = 0;
             {
                 fs.mkdirSync(pdfDir)
             }
+
             const md5 =  crypto.createHash('md5').update(WebURL).digest('hex');
             const pdfFile = path.join(pdfDir,`${md5}.pdf`);
             if( fs.existsSync(pdfFile) )
@@ -294,6 +318,19 @@ let pdfCount = 0;
                 res.end( JSON.stringify({"ErrCode":0,"ErrInfo":"SUCCESS","PDFPath":pdfFile}) );
                 return;
             }
+
+            let it = queueTasks.find((item)=> item.WebURL == WebURL);
+            if(it || Object.keys(dbHandle).length >= 10 ){
+
+                !it && queueTasks.push({WebURL,Status:0});
+
+                res.set('Content-Type', 'application/json; charset=UTF-8');
+                res.end( JSON.stringify({"ErrCode":-1000,"ErrInfo":"FULL","PDFPath":""}) );
+                return;
+            }
+
+            console.log("---- start print " + WebURL)
+            queueTasks.push({WebURL,Status:1});
 
             const win = CreateDefaultWin({width:1,height:1, webPreferences: { offscreen: true,nodeIntegration:false,contextIsolation:true } ,show:false});
             win.loadURL(WebURL);
