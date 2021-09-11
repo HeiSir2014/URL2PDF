@@ -329,7 +329,7 @@ let pdfCount = 0;
                 return;
             }
 
-            console.log("---- start print " + WebURL)
+            // console.log("---- start print " + WebURL)
             queueTasks.push({WebURL,Status:1});
 
             const win = CreateDefaultWin({width:1,height:1, webPreferences: { offscreen: true,nodeIntegration:false,contextIsolation:true } ,show:false});
