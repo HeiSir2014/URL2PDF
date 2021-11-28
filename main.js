@@ -245,7 +245,9 @@ let pdfCount = 0;
                                 exec("sc stop Spooler && sc start Spooler");
                             }
                         },5000)
-                        const pdfData = await e.sender.printToPDF({});
+                        const pdfData = await e.sender.printToPDF({
+                            printBackground: true
+                        });
                         fs.writeFileSync(pdfFile,pdfData);
 
                         _start = false;
@@ -281,7 +283,7 @@ let pdfCount = 0;
                                 exec("sc stop Spooler && sc start Spooler");
                             }
                         },5000)
-                        const pdfData = await win.webContents.printToPDF({});
+                        const pdfData = await win.webContents.printToPDF({printBackground: true});
                         fs.writeFileSync(pdfFile,pdfData);
 
                         _start = false;
