@@ -72,7 +72,9 @@ let pdfCount = 0;
             if(fs.existsSync(localConfig))
             {
                 const config = JSON.parse(fs.readFileSync(localConfig))
-                mainWindow.webContents.send("message",{port:config.port||8080})
+                config.pdfCount && (pdfCount = config.pdfCount);
+                console.log(config)
+                mainWindow.webContents.send("message",{port:config.port||8080,log:`共计：已处理 ${pdfCount} 个请求`})
             }
         });
         appSvr.use(function (req, res, next) {
@@ -188,109 +190,15 @@ let pdfCount = 0;
                 click: () => {
                     mainWindow = null;
                     BrowserWindow.getAllWindows().forEach(win => win.close())
+                    
+                    let config = fs.existsSync(localConfig) ? JSON.parse(fs.readFileSync(localConfig)):{};
+                    config['pdfCount'] = pdfCount;
+                    fs.writeFileSync(localConfig,JSON.stringify(config));
                     app.quit()
                 }
             }
         ]);
         tray.setContextMenu(contextMenu);
-
-        async function timeoutResp(webContentsId)
-        {
-            let res = dbHandle[webContentsId];  res && (delete dbHandle[webContentsId]);
-            const content = webContents.fromId(webContentsId);
-            const WebURL = content.getURL();
-            const win = content?BrowserWindow.fromWebContents(content):null;
-            if(res == null) {
-                win && win.close();
-                return;
-            };
-            try{
-                const pdfDir = path.join( path.dirname(process.execPath),'pdfOuts');
-                if( !fs.existsSync(pdfDir) )
-                {
-                    fs.mkdirSync(pdfDir)
-                }
-                const md5 =  crypto.createHash('md5').update(WebURL).digest('hex');
-                const pdfFile = path.join(pdfDir,`${md5}.pdf`);
-                if( !fs.existsSync(pdfFile) )
-                {
-                    const pdfData = await content.printToPDF({
-                        printBackground: true,
-                        marginsType: 0,
-                        printSelectionOnly: false,
-                        landscape: false,
-                        pageSize: 'A4',
-                        scaleFactor: 0
-                    });
-                    fs.writeFileSync(pdfFile,pdfData);
-                }
-                //res.set('Content-Type', 'application/pdf');
-                
-                if(res !== true)
-                {
-                    res.set('Content-Type', 'application/json; charset=UTF-8');
-                    res.end( JSON.stringify({"ErrCode":0,"ErrInfo":"SUCCESS","PDFPath":pdfFile}) );
-                }
-                res = null;
-                
-                pdfCount += 1
-                mainWindow && mainWindow.webContents.send("message",{log:`共计：已处理 ${pdfCount} 个请求`})
-            }
-            catch(error){
-                console.log(error)
-            }
-            finally{
-                res && res.status(404).send();
-                win && win.close();
-                
-                let last = queueTasks.find((item)=> item.WebURL == WebURL);
-                if(last)
-                {
-                    let idx = queueTasks.findIndex((item) => item == last);
-                    idx >= 0 && queueTasks.splice(idx,1);
-                }
-
-                // 查询下一个任务
-                let itr = queueTasks.find((item)=> item.Status == 0)
-                if(!itr) return;
-
-                itr.Status = 1;
-
-                const win_ = CreateDefaultWin({width:1,height:1, webPreferences: { offscreen: true,nodeIntegration:false,contextIsolation:true } ,show:false});
-                win_.loadURL(itr.WebURL);
-                dbHandle[win_.webContents.id] = true;
-            }
-        }
-
-        function webRequestReq(details, callback){
-            if(!details.webContentsId || details.webContentsId  == mainWindow.webContents.id) {
-                callback({cancel:false});return
-            }
-            const id = details.webContentsId;
-            // console.log("webRequestReq")
-            // console.log(details.url)
-            timeouts[id] && (clearTimeout(timeouts[id]),delete timeouts[id]);
-            callback({cancel:false});
-        };
-
-        function webRequestRsp(details){
-            if(!details.webContentsId || details.webContentsId  == mainWindow.webContents.id) {
-                return
-            }
-            const id = details.webContentsId;
-            // console.log("webRequestRsp")
-            // console.log(details.url)
-            timeouts[id] && (clearTimeout(timeouts[id]),delete timeouts[id]);
-        }
-        
-        function webRequestRspCompleted(details){
-            if(!details.webContentsId || details.webContentsId  == mainWindow.webContents.id) {return}
-            const id = details.webContentsId;
-            // console.log("webRequestRspCompleted")
-            // console.log(details.url)
-            timeouts[id] && (clearTimeout(timeouts[id]),delete timeouts[id]);
-            timeouts[id] = setTimeout( timeoutResp,1500,id );
-        }
 
         async function apiHandle(req, res) {
             let WebURL = req.query['WebURL'];
@@ -310,6 +218,7 @@ let pdfCount = 0;
 
             const md5 =  crypto.createHash('md5').update(WebURL).digest('hex');
             const pdfFile = path.join(pdfDir,`${md5}.pdf`);
+            logger.debug('pdfFile :'+pdfFile + " | "+WebURL);
             if( fs.existsSync(pdfFile) )
             {
                 pdfCount += 1
@@ -318,33 +227,90 @@ let pdfCount = 0;
                 res.end( JSON.stringify({"ErrCode":0,"ErrInfo":"SUCCESS","PDFPath":pdfFile}) );
                 return;
             }
-
-            let it = queueTasks.find((item)=> item.WebURL == WebURL);
-            if(it || Object.keys(dbHandle).length >= 10 ){
-
-                !it && queueTasks.push({WebURL,Status:0});
-
-                res.set('Content-Type', 'application/json; charset=UTF-8');
-                res.end( JSON.stringify({"ErrCode":-1000,"ErrInfo":"FULL","PDFPath":""}) );
-                return;
-            }
-
-            // console.log("---- start print " + WebURL)
-            queueTasks.push({WebURL,Status:1});
-
-            const win = CreateDefaultWin({width:1,height:1, webPreferences: { offscreen: true,nodeIntegration:false,contextIsolation:true } ,show:false});
+            const win = CreateDefaultWin({width:1280,height:720, webPreferences: { offscreen: true,nodeIntegration:false,contextIsolation:true,preload: path.join(__dirname, 'preload.js'), } ,show:false});
             win.loadURL(WebURL);
-            dbHandle[win.webContents.id] = true;
+            win.webContents.on("ipc-message",async (e,channel,data)=>{
+                if(channel != "NotifyPrint") return;
+                try {
+                    const pdfDir = path.join( path.dirname(process.execPath),'pdfOuts');
+                    !fs.existsSync(pdfDir) && fs.mkdirSync(pdfDir);
+                    const md5 =  crypto.createHash('md5').update(WebURL).digest('hex');
+                    const pdfFile = path.join(pdfDir,`${md5}.pdf`);
+                    if( !fs.existsSync(pdfFile) )
+                    {
+                        let _start = true;
+                        setTimeout(()=>{
+                            if(_start){
+                                const {exec} = require("child_process");
+                                exec("sc stop Spooler && sc start Spooler");
+                            }
+                        },5000)
+                        const pdfData = await e.sender.printToPDF({});
+                        fs.writeFileSync(pdfFile,pdfData);
 
-            res.set('Content-Type', 'application/json; charset=UTF-8');
-            res.end( JSON.stringify({"ErrCode":-1000,"ErrInfo":"FULL","PDFPath":""}) );
+                        _start = false;
+                    }
+                    res.set('Content-Type', 'application/json; charset=UTF-8');
+                    res.end( JSON.stringify({"ErrCode":0,"ErrInfo":"SUCCESS","PDFPath":pdfFile}) );
+                    
+                    pdfCount += 1
+                    mainWindow && mainWindow.webContents.send("message",{log:`共计：已处理 ${pdfCount} 个请求`})
+                } catch (error) {
+                    logger.error(error);
+                }
+                finally{
+                    finishHandle && clearTimeout(finishHandle);
+
+                    win && !win.isDestroyed() && win.webContents.isDevToolsOpened() && win.webContents.closeDevTools();
+                    win && !win.isDestroyed() && win.close();
+                }
+            });
+           
+            const finishHandle = setTimeout(async ()=>{
+                try {
+                    const pdfDir = path.join( path.dirname(process.execPath),'pdfOuts');
+                    !fs.existsSync(pdfDir) && fs.mkdirSync(pdfDir);
+                    const md5 =  crypto.createHash('md5').update(WebURL).digest('hex');
+                    const pdfFile = path.join(pdfDir,`${md5}.pdf`);
+                    if( !fs.existsSync(pdfFile) )
+                    {
+                        let _start = true;
+                        setTimeout(()=>{
+                            if(_start){
+                                const {exec} = require("child_process");
+                                exec("sc stop Spooler && sc start Spooler");
+                            }
+                        },5000)
+                        const pdfData = await win.webContents.printToPDF({});
+                        fs.writeFileSync(pdfFile,pdfData);
+
+                        _start = false;
+                    }
+                    res.set('Content-Type', 'application/json; charset=UTF-8');
+                    res.end( JSON.stringify({"ErrCode":0,"ErrInfo":"SUCCESS","PDFPath":pdfFile}) );
+                    res = null;
+                    
+                    pdfCount += 1
+                    mainWindow && mainWindow.webContents.send("message",{log:`共计：已处理 ${pdfCount} 个请求`})
+                } catch (error) {
+                    logger.error(error);
+                }
+                finally{
+                    res && res.set('Content-Type', 'application/json; charset=UTF-8');
+                    res && res.end( JSON.stringify({"ErrCode":-1000,"ErrInfo":"","PDFPath":""}) );
+
+                    win && !win.isDestroyed() && win.webContents.isDevToolsOpened() && win.webContents.closeDevTools();
+                    win && !win.isDestroyed() && win.close();
+                }
+            },30000);
             return;
         }
 
         
-        session.defaultSession.webRequest.onBeforeRequest(webRequestReq);
-        session.defaultSession.webRequest.onResponseStarted(webRequestRsp);
-        session.defaultSession.webRequest.onCompleted(webRequestRspCompleted);
+        // session.defaultSession.webRequest.onBeforeRequest(webRequestReq);
+        // session.defaultSession.webRequest.onResponseStarted(webRequestRsp);
+        // session.defaultSession.webRequest.onCompleted(webRequestRspCompleted);
+        // session.defaultSession.webRequest.onErrorOccurred(webRequestRspCompleted);
 
         logger.info('load success');
     });
