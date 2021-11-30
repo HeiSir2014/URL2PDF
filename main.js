@@ -239,7 +239,7 @@ let pdfCount = 0;
                     if( !fs.existsSync(pdfFile) )
                     {
                         let _start = true;
-                        setTimeout(()=>{
+                        let handle_ = setTimeout(()=>{
                             if(_start){
                                 const {exec} = require("child_process");
                                 exec("sc stop Spooler && sc start Spooler");
@@ -251,6 +251,8 @@ let pdfCount = 0;
                         fs.writeFileSync(pdfFile,pdfData);
 
                         _start = false;
+
+                        handle_ && (clearTimeout(handle_),handle_ = 0);
                     }
                     res.set('Content-Type', 'application/json; charset=UTF-8');
                     res.end( JSON.stringify({"ErrCode":0,"ErrInfo":"SUCCESS","PDFPath":pdfFile}) );
@@ -277,7 +279,7 @@ let pdfCount = 0;
                     if( !fs.existsSync(pdfFile) )
                     {
                         let _start = true;
-                        setTimeout(()=>{
+                        let handle_ = setTimeout(()=>{
                             if(_start){
                                 const {exec} = require("child_process");
                                 exec("sc stop Spooler && sc start Spooler");
@@ -287,6 +289,8 @@ let pdfCount = 0;
                         fs.writeFileSync(pdfFile,pdfData);
 
                         _start = false;
+
+                        handle_ && (clearTimeout(handle_),handle_ = 0);
                     }
                     res.set('Content-Type', 'application/json; charset=UTF-8');
                     res.end( JSON.stringify({"ErrCode":0,"ErrInfo":"SUCCESS","PDFPath":pdfFile}) );
