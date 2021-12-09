@@ -58,10 +58,14 @@ let pdfCount = 0;
                 new winston.transports.Console(),
                 new winston.transports.File({
                     filename: path.join(app.getPath('userData'), 'logs/error.log'),
-                    level: 'error'
+                    level: 'error',
+                    maxsize:5*1024*1024,
+                    maxFiles:5
                 }),
                 new winston.transports.File({
-                    filename: path.join(app.getPath('userData'), 'logs/all.log')
+                    filename: path.join(app.getPath('userData'), 'logs/all.log'),
+                    maxsize:5*1024*1024,
+                    maxFiles:5
                 }),
             ],
         });
@@ -227,89 +231,97 @@ let pdfCount = 0;
                 res.end( JSON.stringify({"ErrCode":0,"ErrInfo":"SUCCESS","PDFPath":pdfFile}) );
                 return;
             }
-            const win = CreateDefaultWin({width:1280,height:720, webPreferences: { offscreen: true,nodeIntegration:false,contextIsolation:true,preload: path.join(__dirname, 'preload.js'), } ,show:false});
-            win.loadURL(WebURL);
-            win.webContents.on("ipc-message",async (e,channel,data)=>{
-                if(channel != "NotifyPrint") return;
-                try {
-                    const pdfDir = path.join( path.dirname(process.execPath),'pdfOuts');
-                    !fs.existsSync(pdfDir) && fs.mkdirSync(pdfDir);
-                    const md5 =  crypto.createHash('md5').update(WebURL).digest('hex');
-                    const pdfFile = path.join(pdfDir,`${md5}.pdf`);
-                    if( !fs.existsSync(pdfFile) )
-                    {
-                        let _start = true;
-                        let handle_ = setTimeout(()=>{
-                            if(_start){
-                                const {exec} = require("child_process");
-                                exec("sc stop Spooler && sc start Spooler");
-                            }
-                        },5000)
-                        const pdfData = await e.sender.printToPDF({
-                            printBackground: true
-                        });
-                        fs.writeFileSync(pdfFile,pdfData);
 
-                        _start = false;
+            if(BrowserWindow.getAllWindows().length >= 5){
+                let itr = queueTasks.find((item)=>item.WebURL == WebURL);
+                if( !itr )
+                {
+                    queueTasks.push({WebURL,res});
 
-                        handle_ && (clearTimeout(handle_),handle_ = 0);
-                    }
-                    res.set('Content-Type', 'application/json; charset=UTF-8');
-                    res.end( JSON.stringify({"ErrCode":0,"ErrInfo":"SUCCESS","PDFPath":pdfFile}) );
+                    logger.info(`添加任务 ${WebURL} 等待处理... | 当前现有排队的任务数：${queueTasks.length}`);
+                }
+                else{
                     
-                    pdfCount += 1
-                    mainWindow && mainWindow.webContents.send("message",{log:`共计：已处理 ${pdfCount} 个请求`})
-                } catch (error) {
-                    logger.error(error);
+                    logger.info(`添加任务失败，有重复任务在等待了，关闭旧连接 ${WebURL} 等待处理... | 当前现有排队的任务数：${queueTasks.length}`);
+                    itr.res.set('Content-Type', 'application/json; charset=UTF-8');
+                    itr.res.end( JSON.stringify({"ErrCode":-1001,"ErrInfo":"","PDFPath":""}) );
+
+                    itr.res = res;
                 }
-                finally{
-                    finishHandle && clearTimeout(finishHandle);
+            }
+            else
+            {
+                printPDF(WebURL,res);
+            }
+        }
 
-                    win && !win.isDestroyed() && win.webContents.isDevToolsOpened() && win.webContents.closeDevTools();
-                    win && !win.isDestroyed() && win.close();
+        async function WebContentPrint(WebURL,webContent,res,finishHandle){
+            let win = null;
+            try {
+                win = BrowserWindow.fromWebContents(webContent);
+                const pdfDir = path.join( path.dirname(process.execPath),'pdfOuts');
+                !fs.existsSync(pdfDir) && fs.mkdirSync(pdfDir);
+                const md5 =  crypto.createHash('md5').update(WebURL).digest('hex');
+                const pdfFile = path.join(pdfDir,`${md5}.pdf`);
+                if( !fs.existsSync(pdfFile) )
+                {
+                    let handle_ = null;
+                    process.platform == "win32" && (handle_ = setTimeout(()=>{
+                        const {exec} = require("child_process");
+                        exec("sc stop Spooler && sc start Spooler");
+                    },5000));
+                    const pdfData = await webContent.printToPDF({
+                        printBackground: true
+                    });
+                    fs.writeFileSync(pdfFile,pdfData);
+                    handle_ && (clearTimeout(handle_),handle_ = null);
                 }
-            });
-           
-            const finishHandle = setTimeout(async ()=>{
-                try {
-                    const pdfDir = path.join( path.dirname(process.execPath),'pdfOuts');
-                    !fs.existsSync(pdfDir) && fs.mkdirSync(pdfDir);
-                    const md5 =  crypto.createHash('md5').update(WebURL).digest('hex');
-                    const pdfFile = path.join(pdfDir,`${md5}.pdf`);
-                    if( !fs.existsSync(pdfFile) )
-                    {
-                        let _start = true;
-                        let handle_ = setTimeout(()=>{
-                            if(_start){
-                                const {exec} = require("child_process");
-                                exec("sc stop Spooler && sc start Spooler");
-                            }
-                        },5000)
-                        const pdfData = await win.webContents.printToPDF({printBackground: true});
-                        fs.writeFileSync(pdfFile,pdfData);
-
-                        _start = false;
-
-                        handle_ && (clearTimeout(handle_),handle_ = 0);
-                    }
+                
+                try{
                     res.set('Content-Type', 'application/json; charset=UTF-8');
                     res.end( JSON.stringify({"ErrCode":0,"ErrInfo":"SUCCESS","PDFPath":pdfFile}) );
                     res = null;
-                    
-                    pdfCount += 1
-                    mainWindow && mainWindow.webContents.send("message",{log:`共计：已处理 ${pdfCount} 个请求`})
-                } catch (error) {
-                    logger.error(error);
                 }
-                finally{
-                    res && res.set('Content-Type', 'application/json; charset=UTF-8');
-                    res && res.end( JSON.stringify({"ErrCode":-1000,"ErrInfo":"","PDFPath":""}) );
+                catch{
+                    let _ = [];
+                    let p = path.join(__dirname,"fail.json");
+                    fs.existsSync(p) && (_ = JSON.parse(fs.readFileSync(p,{encoding:"utf-8"})));
+                    _.push({WebURL,pdfFile});
+                    fs.writeFileSync(p,JSON.stringify(_));
+                }
+                
+                pdfCount += 1
+                mainWindow && mainWindow.webContents.send("message",{log:`共计：已处理 ${pdfCount} 个请求`})
+            } catch (error) {
+                logger.error(error);
+            }
+            finally{
+                finishHandle && clearTimeout(finishHandle);
 
-                    win && !win.isDestroyed() && win.webContents.isDevToolsOpened() && win.webContents.closeDevTools();
-                    win && !win.isDestroyed() && win.close();
+                res && res.set('Content-Type', 'application/json; charset=UTF-8');
+                res && res.end( JSON.stringify({"ErrCode":-1000,"ErrInfo":"","PDFPath":""}) );
+
+                win && !win.isDestroyed() && win.webContents.isDevToolsOpened() && win.webContents.closeDevTools();
+                win && !win.isDestroyed() && win.close();
+
+                if(queueTasks.length > 0)
+                {
+                    let item = queueTasks.shift();
+                    logger.info(`开始处理任务 ${item.WebURL} ... | 当前现有排队的任务数：${queueTasks.length}`);
+                    setTimeout(printPDF,0,item.WebURL,item.res);
                 }
-            },30000);
-            return;
+            }
+        }
+
+        function printPDF(WebURL,res)
+        {
+            const win = CreateDefaultWin({width:1280,height:720, webPreferences: { offscreen: true,nodeIntegration:false,contextIsolation:true,preload: path.join(__dirname, 'preload.js'), } ,show:false});
+            win.loadURL(WebURL);
+            const finishHandle = setTimeout(WebContentPrint,30000,WebURL,win.webContents,res);
+            win.webContents.on("ipc-message",async (e,channel,data)=>{
+                if(channel != "NotifyPrint") return;
+                WebContentPrint(WebURL,e.sender,res,finishHandle);
+            });
         }
 
         
