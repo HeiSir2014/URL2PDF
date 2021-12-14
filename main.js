@@ -35,6 +35,14 @@ let pdfCount = 0;
         app.quit()
         return
     }
+    app.commandLine.appendSwitch('no-sandbox')
+    app.commandLine.appendSwitch('disable-gpu')
+    app.commandLine.appendSwitch('disable-software-rasterizer')
+    app.commandLine.appendSwitch('disable-gpu-compositing')
+    app.commandLine.appendSwitch('disable-gpu-rasterization')
+    app.commandLine.appendSwitch('disable-gpu-sandbox')
+    app.commandLine.appendSwitch('--no-sandbox')
+    app.disableHardwareAcceleration();
 
     process.on('uncaughtException', (err, origin) => {
         logger.error(`uncaughtException: ${err} | ${origin}`)
@@ -70,7 +78,7 @@ let pdfCount = 0;
             ],
         });
 
-        mainWindow = CreateDefaultWin({width:500,height:320,frame:true,resizable:true})
+        mainWindow = CreateDefaultWin({width:500,height:380,frame:true,resizable:true})
         mainWindow.loadFile(path.join("static","server.html"));
         mainWindow.webContents.on("dom-ready",()=>{
             if(fs.existsSync(localConfig))
@@ -78,7 +86,7 @@ let pdfCount = 0;
                 const config = JSON.parse(fs.readFileSync(localConfig))
                 config.pdfCount && (pdfCount = config.pdfCount);
                 console.log(config)
-                mainWindow.webContents.send("message",{port:config.port||8080,log:`共计：已处理 ${pdfCount} 个请求`})
+                mainWindow.webContents.send("message",{port:config.port||8080,log:`共计：已处理 ${pdfCount} 个请求`,restart:config.restart||false})
             }
         });
         appSvr.use(function (req, res, next) {
@@ -156,6 +164,20 @@ let pdfCount = 0;
                 showDirInExplorer(logDir);
                 return;
             }
+            if(channel == 'set-restart')
+            {
+                let config = fs.existsSync(localConfig) ? JSON.parse(fs.readFileSync(localConfig)):{};
+                config['restart'] = data;
+                fs.writeFileSync(localConfig,JSON.stringify(config));
+                return;
+            }
+            if(channel == 'restart')
+            {
+                tray && tray.destroy();
+                app.relaunch({ args: process.argv.slice(1).concat(['--relaunch']) })
+                app.exit(0)
+                return;
+            }
         });
 
         mainWindow.on('close',function(e){
@@ -164,7 +186,6 @@ let pdfCount = 0;
             mainWindow && mainWindow.hide()
         })
         mainWindow.on('closed',()=> mainWindow=null );
-
 
         tray = new Tray(path.join(__dirname, 'static/icon/logo.png'))
         tray.setTitle("URL2PDF 服务");
@@ -194,7 +215,7 @@ let pdfCount = 0;
                 click: () => {
                     mainWindow = null;
                     BrowserWindow.getAllWindows().forEach(win => win.close())
-                    
+                    tray && tray.destroy();
                     let config = fs.existsSync(localConfig) ? JSON.parse(fs.readFileSync(localConfig)):{};
                     config['pdfCount'] = pdfCount;
                     fs.writeFileSync(localConfig,JSON.stringify(config));
@@ -267,8 +288,33 @@ let pdfCount = 0;
                 {
                     let handle_ = null;
                     process.platform == "win32" && (handle_ = setTimeout(()=>{
+                        win && !win.isDestroyed() && win.webContents.isDevToolsOpened() && win.webContents.closeDevTools();
+                        win && !win.isDestroyed() && win.close();
+                        win = null;
+
                         const {exec} = require("child_process");
-                        exec("sc stop Spooler && sc start Spooler");
+                        exec("sc stop spooler",{encoding:"utf-8"},(err,stdout,stderr)=>{
+                            if(err)
+                            {
+                                logger.error(JSON.stringify(err));
+                                logger.error(stdout);
+                                logger.error(stderr);
+                            }
+                            else{
+                                logger.info(stdout + stderr);
+                            }
+                            exec("sc start Spooler",{encoding:"utf-8"},(err,stdout,stderr)=>{
+                                if(err)
+                                {
+                                    logger.error(JSON.stringify(err));
+                                    logger.error(stdout);
+                                    logger.error(stderr);
+                                }
+                                else{
+                                    logger.info(stdout + stderr);
+                                }
+                            });
+                        });
                     },5000));
                     const pdfData = await webContent.printToPDF({
                         printBackground: true
@@ -375,7 +421,7 @@ function CreateDefaultWin(options) {
             nodeIntegration: true,
             spellcheck: false,
             webSecurity: !isDev,
-            contextIsolation:false
+            contextIsolation:false,
         },
         alwaysOnTop: false,
         hasShadow: false,

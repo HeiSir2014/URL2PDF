@@ -107,13 +107,23 @@
 
         .line.tip{
             position:absolute;
-            bottom: 0px;
+            bottom: 10px;
             left: 0;
             right: 0;
             margin: 0 auto;
             color: #888;
             width: fit-content;
             font-size: 13px;
+            line-height: 24px;
+        }
+
+        .timeout{
+            display: inline-block;
+            padding: 2px 15px;
+            background-color: #0076dd;
+            color: #fff;
+            margin-left: 10px;
+            border-radius: 25px;
         }
     </style>
 </head>
@@ -135,8 +145,9 @@
         <div class="line">
             <button class="dir openPdf">打开PDF目录</button>
             <button class="dir openLog">打开日志目录</button>  
+            <input type="checkbox" class="dir restart">定时重启</button>  
         </div>
-        <div class="line tip">窗口关闭后，会自动隐藏到系统托盘中</div>
+        <div class="line tip">窗口关闭后，会自动隐藏到系统托盘中<div class="timeout"></div></div>
     </div>
 
     <script>
@@ -146,15 +157,20 @@
         const stop = document.querySelector('.stop');
         const openPdf = document.querySelector('.openPdf');
         const openLog = document.querySelector('.openLog');
+        const restartBtn = document.querySelector('.restart');
         const statusDiv = document.querySelector('.status');
         const logDiv = document.querySelector('.log');
+        const timeoutDiv = document.querySelector('.timeout');
+        let restartTime = null;
+        let startClickTime = null;
 
-        ipcRenderer.on("message",function(e,{port,log,status,success,fail}){
+        ipcRenderer.on("message",function(e,{port,log,status,success,fail,restart}){
             port && (portInput.value = port);
             log && (logDiv.innerHTML = log);
             status && (statusDiv.innerHTML = status);
             success && (stop.disabled = false)
             fail && (start.disabled = false)
+            restart && (restartBtn.checked = true,restart_())
         });
 
         start.onclick = function(){
@@ -178,6 +194,29 @@
         openLog.onclick = function(){
             ipcRenderer.send("openLog");
         }
+
+        function restart_(){
+            if(restartTime) clearInterval(restartTime),restartTime = null;
+            if( restartBtn.checked ){
+                startClickTime = Date.now();
+                restartTime = setInterval(()=>{
+                    timeoutDiv.innerHTML = `${ Math.floor(12*3600 - (Date.now() - startClickTime)/1000)} 秒后重启服务`;
+                    if((Date.now() - startClickTime)/1000 >= 12*3600)
+                    {
+                        ipcRenderer.send("restart");
+                        clearInterval(restartTime),restartTime = null;
+                    }
+                },1000);
+            }
+            else{
+                timeoutDiv.innerHTML = ``;
+            }
+            ipcRenderer.send("set-restart",restartBtn.checked);
+        }
+
+        restartBtn.onclick = restart_;
+
+        setTimeout(()=>start.click(),1000)
     </script>
 </body>
 </html>
