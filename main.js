@@ -27,6 +27,7 @@ let dbHandle = {};
 let queueTasks = [];
 let mainWindow;
 let pdfCount = 0;
+let tray = null;
 
 (function () {
 
@@ -81,6 +82,8 @@ let pdfCount = 0;
         mainWindow = CreateDefaultWin({width:500,height:380,frame:true,resizable:true})
         mainWindow.loadFile(path.join("static","server.html"));
         mainWindow.webContents.on("dom-ready",()=>{
+            let prints = mainWindow.webContents.getPrinters();
+            logger.info(JSON.stringify(prints));
             if(fs.existsSync(localConfig))
             {
                 const config = JSON.parse(fs.readFileSync(localConfig))
@@ -313,6 +316,10 @@ let pdfCount = 0;
                                 else{
                                     logger.info(stdout + stderr);
                                 }
+
+                                tray && tray.destroy();
+                                app.relaunch({ args: process.argv.slice(1).concat(['--relaunch']) })
+                                app.exit(0)
                             });
                         });
                     },5000));
@@ -361,7 +368,7 @@ let pdfCount = 0;
 
         function printPDF(WebURL,res)
         {
-            const win = CreateDefaultWin({width:1280,height:720, webPreferences: { offscreen: true,nodeIntegration:false,contextIsolation:true,preload: path.join(__dirname, 'preload.js'), } ,show:false});
+            const win = CreateDefaultWin({width:1280,height:720, webPreferences: { offscreen: false,nodeIntegration:false,contextIsolation:true,preload: path.join(__dirname, 'preload.js'), } ,show:false});
             win.loadURL(WebURL);
             const finishHandle = setTimeout(WebContentPrint,30000,WebURL,win.webContents,res);
             win.webContents.on("ipc-message",async (e,channel,data)=>{
