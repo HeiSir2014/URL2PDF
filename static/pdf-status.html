@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    <title>PDF 服务状态</title>
+    <style>
+        body,
+        html {
+            margin: 0;
+            padding: 0;
+        }
+
+        .header,
+        .title {
+            width: 100%;
+            margin: 0 auto;
+            display: block;
+            color: #fff;
+            padding: 10px 60px;
+            box-sizing: border-box;
+        }
+
+        .pdfCount {
+            color: #ff864d;
+            font-size: 48px;
+            margin: 0 10px;
+            text-shadow: 2px 1px #9b9b9b;
+        }
+
+        .pdfCountToday {
+            color: #0aa5ff;
+            font-size: 64px;
+            margin: 0px 15px;
+            text-shadow: 2px 1px #c2c2c2;
+        }
+
+        .content {
+            overflow: hidden;
+            border-radius: 50px;
+            padding: 50px 0;
+            background-color: #b282dd;
+            margin: 100px auto 0 auto;
+            width: 640px;
+            max-width: 100%;
+        }
+
+        @media screen and (max-width:640px) {
+            .header {
+                font-size: 18px;
+                padding: 10px 20px;
+            }
+
+            .content {
+                margin: 0px auto 0 auto;
+                border-radius: 10px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="content">
+        <h1 class="title" style="text-align:center;">报告转码服务</h1>
+        <h2 class="header">当前时间：${ new Date(Date.now() + 3600000*8).toJSON().replace('T',' ').replace('Z','') }</h2>
+        <h2 class="header">启动时间：${ processStartTime }</h2>
+        <h2 class="header">共生成 <strong class="pdfCount">${ pdfCount }</strong> | 今日 <strong class="pdfCountToday">${
+                pdfCountToday }</strong> 份报告</h1>
+            <h2 class="header">CPU使用率：${ Math.floor(percentCPUUsage) }%</h1>
+                <h2 class="header">内存使用率：${ Math.floor((process.getSystemMemoryInfo().total -
+                    process.getSystemMemoryInfo().free) * 100 / process.getSystemMemoryInfo().total) }%</h1>
+    </div>
+    <script>
+        setTimeout(() => {
+            location.reload();
+        }, 5000);
+    </script>
+</body>
+
+</html>

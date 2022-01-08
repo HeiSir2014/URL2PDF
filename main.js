@@ -20,6 +20,12 @@ const express = require('express');
 const asyncHandler = require('express-async-handler')
 const bodyParser = require('body-parser');
 const morgan  = require('morgan');
+const { cpuUsage } = require('process');
+
+function getDate(){
+    return new Date(Date.now() + 3600000*8).toJSON().substring(0,10)
+}
+
 let appSvr = express();
 let httpServer;
 let timeouts = {};
@@ -27,7 +33,12 @@ let dbHandle = {};
 let queueTasks = [];
 let mainWindow;
 let pdfCount = 0;
+let pdfCountToday = 0;
+let pdfCountDate = getDate();
 let tray = null;
+let processStartTime = '';
+let percentCPUUsage = 0;
+let _cpuUsage;
 
 (function () {
 
@@ -54,7 +65,12 @@ let tray = null;
 
     app.on('ready', async () => {
         localConfig = path.join(app.getPath('userData'), 'config.json');
-
+        processStartTime = new Date(Date.now() + 3600000*8).toJSON().replace('T',' ').replace('Z','');
+        _cpuUsage = process.getCPUUsage();
+        _cpuUsage.percentCPUUsage;
+        setInterval(()=>{
+            percentCPUUsage = process.getCPUUsage().percentCPUUsage
+        },1000);
         logger = winston.createLogger({
             level: 'debug',
             format: winston.format.combine(
@@ -79,7 +95,7 @@ let tray = null;
             ],
         });
 
-        mainWindow = CreateDefaultWin({width:500,height:380,frame:true,resizable:true})
+        mainWindow = CreateDefaultWin({width:600,height:480,frame:true,resizable:true})
         mainWindow.loadFile(path.join("static","server.html"));
         mainWindow.webContents.on("dom-ready",()=>{
             let prints = mainWindow.webContents.getPrinters();
@@ -88,8 +104,12 @@ let tray = null;
             {
                 const config = JSON.parse(fs.readFileSync(localConfig))
                 config.pdfCount && (pdfCount = config.pdfCount);
+                config.pdfCountDate && config.pdfCountDate == getDate() && (pdfCountToday= config.pdfCountToday);
                 console.log(config)
-                mainWindow.webContents.send("message",{port:config.port||8080,log:`共计：已处理 ${pdfCount} 个请求`,restart:config.restart||false})
+                mainWindow.webContents.send("message",{port:config.port||8080,
+                    log:`共计生成<strong class="pdfCount">${
+                        pdfCount
+                    }</strong>| 今日<strong class="pdfCountToday">${pdfCountToday}</strong>份报告`,pdfCount,restart:config.restart||false})
             }
         });
         appSvr.use(function (req, res, next) {
@@ -137,6 +157,94 @@ let tray = null;
                     logger.info(`server start success on ${data.port}`);
                     appSvr.get('/api/Url2PDF/', asyncHandler(apiHandle));
                     appSvr.post('/api/Url2PDF/', asyncHandler(apiHandle));
+                    appSvr.get('/api/status/', asyncHandler((req, res)=>{
+                        res.setHeader("Cache-Control","no-cache, no-store, must-revalidate")
+                        res.setHeader("Pragma","no-cache")
+                        res.setHeader("Expires","0")
+                        res.send(`<!DOCTYPE html>
+                        <html>
+                        <head>
+                            <meta charset="UTF-8">
+                            <meta http-equiv="X-UA-Compatible" content="IE=edge">
+                            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                            <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+                            <meta http-equiv="Pragma" content="no-cache" />
+                            <meta http-equiv="Expires" content="0" />
+                            <title>PDF 服务状态</title>
+                            <style>
+                                body,html{
+                                    margin:0;
+                                    padding:0;
+                                }
+
+                                .header,.title{
+                                    width:100%;
+                                    margin: 0 auto;
+                                    display: block;
+                                    color: #fff;
+                                    padding: 10px 60px;
+                                    box-sizing: border-box;
+                                }
+
+                                .pdfCount{
+                                    color: #ff864d;
+                                    font-size: 48px;
+                                    margin: 0 10px;
+                                    text-shadow: 2px 1px #9b9b9b;
+                                }
+
+                                .pdfCountToday{
+                                    color: #0aa5ff;
+                                    font-size: 64px;
+                                    margin: 0px 15px;
+                                    text-shadow: 2px 1px #c2c2c2;
+                                }
+
+                                .content{
+                                    overflow: hidden;
+                                    border-radius:50px;
+                                    padding: 50px 0;
+                                    background-color: #b282dd;
+                                    margin: 100px auto 0 auto;
+                                    width: 640px;
+                                    max-width:100%;
+                                }
+
+                                @media screen and (max-width:640px){
+                                    .header{
+                                        font-size:18px;
+                                        padding: 10px 20px;
+                                    }
+                                    .pdfCount{
+                                        font-size: 24px;
+                                    }
+                                    .pdfCountToday{
+                                        font-size: 32px;
+                                    }
+                                    .content{
+                                        margin: 0px auto 0 auto;
+                                        border-radius:10px;
+                                    }
+                                }
+                            </style>
+                        </head>
+                        <body>
+                            <div class="content">
+                                <h1 class="title" style="text-align:center;">报告转码服务</h1>
+                                <h2 class="header">当前时间：${ new Date(Date.now() + 3600000*8).toJSON().replace('T',' ').replace('Z','') }</h2>
+                                <h2 class="header">启动时间：${ processStartTime }</h2>
+                                <h2 class="header">共计<strong class="pdfCount">${ pdfCount }</strong>| 今日<strong class="pdfCountToday">${ pdfCountToday }</strong>份报告</h1>
+                                <h2 class="header">CPU使用率：${ Math.floor(percentCPUUsage) }%</h1>
+                                <h2 class="header">内存使用率：${ Math.floor((process.getSystemMemoryInfo().total - process.getSystemMemoryInfo().free) * 100 /  process.getSystemMemoryInfo().total) }%</h1>
+                            </div>
+                            <script>
+                                setTimeout(()=>{
+                                    location.reload();
+                                },5000);
+                            </script>
+                        </body>
+                        </html>`);
+                    }));
                     mainWindow.webContents.send("message",{status:"服务正在运行...",success:true})
                     let config = fs.existsSync(localConfig) ? JSON.parse(fs.readFileSync(localConfig)):{};
                     config['port'] = data.port;
@@ -211,6 +319,20 @@ let tray = null;
             },
             {
                 type: 'separator'
+            },{
+                label: '重启服务',
+                type: 'normal',
+                click: () => {
+                    mainWindow = null;
+                    BrowserWindow.getAllWindows().forEach(win => win.close())
+                    tray && tray.destroy();
+                    saveCount();
+                    app.relaunch({ args: process.argv.slice(1).concat(['--relaunch']) })
+                    app.quit()
+                }
+            },
+            {
+                type: 'separator'
             },
             {
                 label: '退出URL2PDF',
@@ -219,9 +341,7 @@ let tray = null;
                     mainWindow = null;
                     BrowserWindow.getAllWindows().forEach(win => win.close())
                     tray && tray.destroy();
-                    let config = fs.existsSync(localConfig) ? JSON.parse(fs.readFileSync(localConfig)):{};
-                    config['pdfCount'] = pdfCount;
-                    fs.writeFileSync(localConfig,JSON.stringify(config));
+                    saveCount();
                     app.quit()
                 }
             }
@@ -249,8 +369,7 @@ let tray = null;
             logger.debug('pdfFile :'+pdfFile + " | "+WebURL);
             if( fs.existsSync(pdfFile) )
             {
-                pdfCount += 1
-                mainWindow && mainWindow.webContents.send("message",{log:`共计：已处理 ${pdfCount} 个请求`})
+                addCount();
                 res.set('Content-Type', 'application/json; charset=UTF-8');
                 res.end( JSON.stringify({"ErrCode":0,"ErrInfo":"SUCCESS","PDFPath":pdfFile}) );
                 return;
@@ -342,9 +461,7 @@ let tray = null;
                     _.push({WebURL,pdfFile});
                     fs.writeFileSync(p,JSON.stringify(_));
                 }
-                
-                pdfCount += 1
-                mainWindow && mainWindow.webContents.send("message",{log:`共计：已处理 ${pdfCount} 个请求`})
+                addCount();
             } catch (error) {
                 logger.error(error);
             }
@@ -390,7 +507,32 @@ let tray = null;
         app.quit()
     });
 })();
-
+function addCount(){
+    pdfCount += 1;
+    if(pdfCountDate == getDate()){
+        pdfCountToday += 1;
+    }
+    else{
+        pdfCountDate = getDate();
+        pdfCountToday = 1;
+    }
+    saveCount();
+    mainWindow && mainWindow.webContents.send("message",{
+        log:`共计生成<strong class="pdfCount">${
+            pdfCount
+        }</strong>| 今日<strong class="pdfCountToday">${pdfCountToday}</strong>份报告`,pdfCount});
+}
+function saveCount(){
+    try {
+        let config = fs.existsSync(localConfig) ? JSON.parse(fs.readFileSync(localConfig)):{};
+        config['pdfCount'] = pdfCount;
+        config['pdfCountToday'] = pdfCountToday;
+        config['pdfCountDate'] = pdfCountDate;
+        fs.writeFileSync(localConfig,JSON.stringify(config));
+    } catch (error) {
+        logger.error(error);
+    }
+}
 function getStartParam()
 {
     let param = {

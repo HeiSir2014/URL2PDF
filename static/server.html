@@ -68,7 +68,7 @@
         }
 
         .line button:first-child{
-            margin-left: 40px;
+            /* margin-left: 40px; */
         }
 
         .line button.dir{
@@ -96,6 +96,21 @@
 
         .line.log{
             color: #00af74;
+            height: fit-content;
+            margin: 40px auto;
+        }
+
+        .line.log .pdfCount{
+            color: #ff864d;
+            font-size: 48px;
+            margin: 0 10px;
+            text-shadow: 2px 1px #9b9b9b;
+        }
+        .line.log .pdfCountToday{
+            color: #0aa5ff;
+            font-size: 96px;
+            margin: 0 15px;
+            text-shadow: 2px 1px #c2c2c2;
         }
 
         .main{
@@ -129,10 +144,18 @@
 </head>
 <body>
     <div class="main">
-        <div class="line">
+        <div class="line" style="
+        display: inline-block;
+        width: 50%;
+        text-align: right;
+    ">
             请输入端口号：
         </div>
-        <div class="line">
+        <div class="line" style="
+        display: inline-block;
+        width: 49%;
+        text-align: left;
+    ">
             <input type="number" class="port" value="8080" />
         </div>
         <div class="line">
