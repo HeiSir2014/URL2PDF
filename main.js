@@ -19,11 +19,11 @@ const package_self = require('./package.json');
 const express = require('express');
 const asyncHandler = require('express-async-handler')
 const bodyParser = require('body-parser');
-const morgan  = require('morgan');
+const morgan = require('morgan');
 const { cpuUsage } = require('process');
 
-function getDate(){
-    return new Date(Date.now() + 3600000*8).toJSON().substring(0,10)
+function getDate() {
+    return new Date(Date.now() + 3600000 * 8).toJSON().substring(0, 10)
 }
 
 let appSvr = express();
@@ -38,6 +38,7 @@ let pdfCountDate = getDate();
 let tray = null;
 let processStartTime = '';
 let percentCPUUsage = 0;
+let scaleFactor = 100;
 let _cpuUsage;
 
 (function () {
@@ -65,12 +66,12 @@ let _cpuUsage;
 
     app.on('ready', async () => {
         localConfig = path.join(app.getPath('userData'), 'config.json');
-        processStartTime = new Date(Date.now() + 3600000*8).toJSON().replace('T',' ').replace('Z','');
+        processStartTime = new Date(Date.now() + 3600000 * 8).toJSON().replace('T', ' ').replace('Z', '');
         _cpuUsage = process.getCPUUsage();
         _cpuUsage.percentCPUUsage;
-        setInterval(()=>{
+        setInterval(() => {
             percentCPUUsage = process.getCPUUsage().percentCPUUsage
-        },1000);
+        }, 1000);
         logger = winston.createLogger({
             level: 'debug',
             format: winston.format.combine(
@@ -84,32 +85,33 @@ let _cpuUsage;
                 new winston.transports.File({
                     filename: path.join(app.getPath('userData'), 'logs/error.log'),
                     level: 'error',
-                    maxsize:5*1024*1024,
-                    maxFiles:5
+                    maxsize: 5 * 1024 * 1024,
+                    maxFiles: 5
                 }),
                 new winston.transports.File({
                     filename: path.join(app.getPath('userData'), 'logs/all.log'),
-                    maxsize:5*1024*1024,
-                    maxFiles:5
+                    maxsize: 5 * 1024 * 1024,
+                    maxFiles: 5
                 }),
             ],
         });
 
-        mainWindow = CreateDefaultWin({width:600,height:480,frame:true,resizable:true})
-        mainWindow.loadFile(path.join("static","server.html"));
-        mainWindow.webContents.on("dom-ready",()=>{
+        mainWindow = CreateDefaultWin({ width: 600, height: 480, frame: true, resizable: true })
+        mainWindow.loadFile(path.join("static", "server.html"));
+        mainWindow.webContents.on("dom-ready", () => {
             let prints = mainWindow.webContents.getPrinters();
             logger.info(JSON.stringify(prints));
-            if(fs.existsSync(localConfig))
-            {
+            if (fs.existsSync(localConfig)) {
                 const config = JSON.parse(fs.readFileSync(localConfig))
                 config.pdfCount && (pdfCount = config.pdfCount);
-                config.pdfCountDate && config.pdfCountDate == getDate() && (pdfCountToday= config.pdfCountToday);
+                config.pdfCountDate && config.pdfCountDate == getDate() && (pdfCountToday = config.pdfCountToday);
+                if (config.scale) scaleFactor = parseInt(config.scale);
                 console.log(config)
-                mainWindow.webContents.send("message",{port:config.port||8080,
-                    log:`共计生成<strong class="pdfCount">${
-                        pdfCount
-                    }</strong>| 今日<strong class="pdfCountToday">${pdfCountToday}</strong>份报告`,pdfCount,restart:config.restart||false})
+                mainWindow.webContents.send("message", {
+                    port: config.port || 8080,
+                    log: `共计生成<strong class="pdfCount">${pdfCount
+                        }</strong>| 今日<strong class="pdfCountToday">${pdfCountToday}</strong>份报告`, pdfCount, restart: config.restart || false
+                })
             }
         });
         appSvr.use(function (req, res, next) {
@@ -123,44 +125,41 @@ let _cpuUsage;
         appSvr.use(morgan({
             "format": "default",
             "stream": {
-              write: function(str) { logger.debug(str); }
+                write: function (str) { logger.debug(str); }
             }
         }));
-        appSvr.use((err, req, res, next)=>{
+        appSvr.use((err, req, res, next) => {
             logger.error(err.stack)
             next(err)
         })
 
-        function showDirInExplorer(dir)
-        {
-            shell.openExternal(dir).catch((reason)=>{
+        function showDirInExplorer(dir) {
+            shell.openExternal(dir).catch((reason) => {
                 logger.error(`openExternal Error:${dir} ${reason}`);
-                
+
                 let files = fs.readdirSync(dir);
-                if(files && files.length > 0)
-                {
-                    shell.showItemInFolder(path.join(dir,files[0]));
+                if (files && files.length > 0) {
+                    shell.showItemInFolder(path.join(dir, files[0]));
                 }
-                else{
+                else {
                     shell.showItemInFolder(dir);
                 }
             });
         }
 
-        mainWindow.webContents.on("ipc-message",(e,channel,data)=>{
-            if(channel == 'start')
-            {
+        mainWindow.webContents.on("ipc-message", (e, channel, data) => {
+            if (channel == 'start') {
                 try {
                     httpServer && httpServer.close();
-                } catch (_) {}
-                httpServer = appSvr.listen(Number.parseInt(data.port) , function (e) {
+                } catch (_) { }
+                httpServer = appSvr.listen(Number.parseInt(data.port), function (e) {
                     logger.info(`server start success on ${data.port}`);
                     appSvr.get('/api/Url2PDF/', asyncHandler(apiHandle));
                     appSvr.post('/api/Url2PDF/', asyncHandler(apiHandle));
-                    appSvr.get('/api/status/', asyncHandler((req, res)=>{
-                        res.setHeader("Cache-Control","no-cache, no-store, must-revalidate")
-                        res.setHeader("Pragma","no-cache")
-                        res.setHeader("Expires","0")
+                    appSvr.get('/api/status/', asyncHandler((req, res) => {
+                        res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate")
+                        res.setHeader("Pragma", "no-cache")
+                        res.setHeader("Expires", "0")
                         res.send(`<!DOCTYPE html>
                         <html>
                         <head>
@@ -231,11 +230,11 @@ let _cpuUsage;
                         <body>
                             <div class="content">
                                 <h1 class="title" style="text-align:center;">报告转码服务</h1>
-                                <h2 class="header">当前时间：${ new Date(Date.now() + 3600000*8).toJSON().replace('T',' ').replace('Z','') }</h2>
-                                <h2 class="header">启动时间：${ processStartTime }</h2>
-                                <h2 class="header">共计<strong class="pdfCount">${ pdfCount }</strong>| 今日<strong class="pdfCountToday">${ pdfCountToday }</strong>份报告</h1>
-                                <h2 class="header">CPU使用率：${ Math.floor(percentCPUUsage) }%</h1>
-                                <h2 class="header">内存使用率：${ Math.floor((process.getSystemMemoryInfo().total - process.getSystemMemoryInfo().free) * 100 /  process.getSystemMemoryInfo().total) }%</h1>
+                                <h2 class="header">当前时间：${new Date(Date.now() + 3600000 * 8).toJSON().replace('T', ' ').replace('Z', '')}</h2>
+                                <h2 class="header">启动时间：${processStartTime}</h2>
+                                <h2 class="header">共计<strong class="pdfCount">${pdfCount}</strong>| 今日<strong class="pdfCountToday">${pdfCountToday}</strong>份报告</h1>
+                                <h2 class="header">CPU使用率：${Math.floor(percentCPUUsage)}%</h1>
+                                <h2 class="header">内存使用率：${Math.floor((process.getSystemMemoryInfo().total - process.getSystemMemoryInfo().free) * 100 / process.getSystemMemoryInfo().total)}%</h1>
                             </div>
                             <script>
                                 setTimeout(()=>{
@@ -245,45 +244,42 @@ let _cpuUsage;
                         </body>
                         </html>`);
                     }));
-                    mainWindow.webContents.send("message",{status:"服务正在运行...",success:true})
-                    let config = fs.existsSync(localConfig) ? JSON.parse(fs.readFileSync(localConfig)):{};
+                    mainWindow.webContents.send("message", { status: "服务正在运行...", success: true })
+                    let config = fs.existsSync(localConfig) ? JSON.parse(fs.readFileSync(localConfig)) : {};
                     config['port'] = data.port;
-                    fs.writeFileSync(localConfig,JSON.stringify(config));
+                    config['scale'] = data.scale;
+                    if (data.scale) scaleFactor = parseInt(data.scale);
+                    fs.writeFileSync(localConfig, JSON.stringify(config));
                 });
-                httpServer.on('error',function(e){
+                httpServer.on('error', function (e) {
                     logger.error(e)
 
-                    e.code == 'EACCES' && mainWindow.webContents.send("message",{status:"端口被占用",fail:true});
+                    e.code == 'EACCES' && mainWindow.webContents.send("message", { status: "端口被占用", fail: true });
                 });
                 return;
             }
-            if(channel == 'stop')
-            {
+            if (channel == 'stop') {
                 httpServer && httpServer.close();
-                mainWindow.webContents.send("message",{status:"服务停止运行"});
+                mainWindow.webContents.send("message", { status: "服务停止运行" });
                 return;
             }
-            if(channel == 'openPDF')
-            {
-                const pdfDir = path.join( path.dirname(process.execPath),'pdfOuts');
+            if (channel == 'openPDF') {
+                const pdfDir = path.join(path.dirname(process.execPath), 'pdfOuts');
                 showDirInExplorer(pdfDir);
                 return;
             }
-            if(channel == 'openLog')
-            {
+            if (channel == 'openLog') {
                 const logDir = path.join(app.getPath('userData'), 'logs')
                 showDirInExplorer(logDir);
                 return;
             }
-            if(channel == 'set-restart')
-            {
-                let config = fs.existsSync(localConfig) ? JSON.parse(fs.readFileSync(localConfig)):{};
+            if (channel == 'set-restart') {
+                let config = fs.existsSync(localConfig) ? JSON.parse(fs.readFileSync(localConfig)) : {};
                 config['restart'] = data;
-                fs.writeFileSync(localConfig,JSON.stringify(config));
+                fs.writeFileSync(localConfig, JSON.stringify(config));
                 return;
             }
-            if(channel == 'restart')
-            {
+            if (channel == 'restart') {
                 tray && tray.destroy();
                 app.relaunch({ args: process.argv.slice(1).concat(['--relaunch']) })
                 app.exit(0)
@@ -291,18 +287,18 @@ let _cpuUsage;
             }
         });
 
-        mainWindow.on('close',function(e){
+        mainWindow.on('close', function (e) {
             console.log("close")
             mainWindow && e.preventDefault()
             mainWindow && mainWindow.hide()
         })
-        mainWindow.on('closed',()=> mainWindow=null );
+        mainWindow.on('closed', () => mainWindow = null);
 
         tray = new Tray(path.join(__dirname, 'static/icon/logo.png'))
         tray.setTitle("URL2PDF 服务");
         tray.setToolTip("URL2PDF 服务");
         tray.on("double-click", () => {
-            
+
             if (mainWindow.isMinimized()) {
                 mainWindow.restore()
             }
@@ -319,7 +315,7 @@ let _cpuUsage;
             },
             {
                 type: 'separator'
-            },{
+            }, {
                 label: '重启服务',
                 type: 'normal',
                 click: () => {
@@ -349,7 +345,7 @@ let _cpuUsage;
         tray.setContextMenu(contextMenu);
 
         async function apiHandle(req, res) {
-            let WebURL = req.query['WebURL'];
+            let WebURL = req.url.replace(/^.*WebURL=/g,'') || req.query['WebURL'];
             if (!WebURL) {
                 WebURL = req.body.WebURL;
                 if (!WebURL) {
@@ -358,81 +354,74 @@ let _cpuUsage;
                 }
             }
 
-            const pdfDir = path.join( path.dirname(process.execPath),'pdfOuts');
-            if( !fs.existsSync(pdfDir) )
-            {
+            const pdfDir = path.join(path.dirname(process.execPath), 'pdfOuts');
+            if (!fs.existsSync(pdfDir)) {
                 fs.mkdirSync(pdfDir)
             }
 
-            const md5 =  crypto.createHash('md5').update(WebURL).digest('hex');
-            const pdfFile = path.join(pdfDir,`${md5}.pdf`);
-            logger.debug('pdfFile :'+pdfFile + " | "+WebURL);
-            if( fs.existsSync(pdfFile) )
-            {
+            const md5 = crypto.createHash('md5').update(WebURL).digest('hex');
+            const pdfFile = path.join(pdfDir, `${md5}.pdf`);
+            logger.debug('pdfFile :' + pdfFile + " | " + WebURL + ` req.url ${req.url}`);
+            if (fs.existsSync(pdfFile)) {
                 addCount();
                 res.set('Content-Type', 'application/json; charset=UTF-8');
-                res.end( JSON.stringify({"ErrCode":0,"ErrInfo":"SUCCESS","PDFPath":pdfFile}) );
+                res.end(JSON.stringify({ "ErrCode": 0, "ErrInfo": "SUCCESS", "PDFPath": pdfFile }));
                 return;
             }
 
-            if(BrowserWindow.getAllWindows().length >= 5){
-                let itr = queueTasks.find((item)=>item.WebURL == WebURL);
-                if( !itr )
-                {
-                    queueTasks.push({WebURL,res});
+            if (BrowserWindow.getAllWindows().length >= 6) {
+                let itr = queueTasks.find((item) => item.WebURL == WebURL);
+                if (!itr) {
+                    queueTasks.push({ WebURL, res });
 
                     logger.info(`添加任务 ${WebURL} 等待处理... | 当前现有排队的任务数：${queueTasks.length}`);
                 }
-                else{
-                    
+                else {
+
                     logger.info(`添加任务失败，有重复任务在等待了，关闭旧连接 ${WebURL} 等待处理... | 当前现有排队的任务数：${queueTasks.length}`);
                     itr.res.set('Content-Type', 'application/json; charset=UTF-8');
-                    itr.res.end( JSON.stringify({"ErrCode":-1001,"ErrInfo":"","PDFPath":""}) );
+                    itr.res.end(JSON.stringify({ "ErrCode": -1001, "ErrInfo": "", "PDFPath": "" }));
 
                     itr.res = res;
                 }
             }
-            else
-            {
-                printPDF(WebURL,res);
+            else {
+                printPDF(WebURL, res);
             }
         }
 
-        async function WebContentPrint(WebURL,webContent,res,finishHandle){
+        async function WebContentPrint(WebURL, webContent, res, finishHandle) {
             let win = null;
             try {
                 win = BrowserWindow.fromWebContents(webContent);
-                const pdfDir = path.join( path.dirname(process.execPath),'pdfOuts');
+                const pdfDir = path.join(path.dirname(process.execPath), 'pdfOuts');
                 !fs.existsSync(pdfDir) && fs.mkdirSync(pdfDir);
-                const md5 =  crypto.createHash('md5').update(WebURL).digest('hex');
-                const pdfFile = path.join(pdfDir,`${md5}.pdf`);
-                if( !fs.existsSync(pdfFile) )
-                {
+                const md5 = crypto.createHash('md5').update(WebURL).digest('hex');
+                const pdfFile = path.join(pdfDir, `${md5}.pdf`);
+                if (!fs.existsSync(pdfFile)) {
                     let handle_ = null;
-                    process.platform == "win32" && (handle_ = setTimeout(()=>{
+                    process.platform == "win32" && (handle_ = setTimeout(() => {
                         win && !win.isDestroyed() && win.webContents.isDevToolsOpened() && win.webContents.closeDevTools();
                         win && !win.isDestroyed() && win.close();
                         win = null;
 
-                        const {exec} = require("child_process");
-                        exec("sc stop spooler",{encoding:"utf-8"},(err,stdout,stderr)=>{
-                            if(err)
-                            {
+                        const { exec } = require("child_process");
+                        exec("sc stop spooler", { encoding: "utf-8" }, (err, stdout, stderr) => {
+                            if (err) {
                                 logger.error(JSON.stringify(err));
                                 logger.error(stdout);
                                 logger.error(stderr);
                             }
-                            else{
+                            else {
                                 logger.info(stdout + stderr);
                             }
-                            exec("sc start Spooler",{encoding:"utf-8"},(err,stdout,stderr)=>{
-                                if(err)
-                                {
+                            exec("sc start Spooler", { encoding: "utf-8" }, (err, stdout, stderr) => {
+                                if (err) {
                                     logger.error(JSON.stringify(err));
                                     logger.error(stdout);
                                     logger.error(stderr);
                                 }
-                                else{
+                                else {
                                     logger.info(stdout + stderr);
                                 }
 
@@ -441,60 +430,60 @@ let _cpuUsage;
                                 app.exit(0)
                             });
                         });
-                    },5000));
+                    }, 5000));
                     const pdfData = await webContent.printToPDF({
-                        printBackground: true
+                        printBackground: true,
+                        scaleFactor: scaleFactor
                     });
-                    fs.writeFileSync(pdfFile,pdfData);
-                    handle_ && (clearTimeout(handle_),handle_ = null);
+
+                    fs.writeFileSync(pdfFile, pdfData);
+                    handle_ && (clearTimeout(handle_), handle_ = null);
                 }
-                
-                try{
+
+                try {
                     res.set('Content-Type', 'application/json; charset=UTF-8');
-                    res.end( JSON.stringify({"ErrCode":0,"ErrInfo":"SUCCESS","PDFPath":pdfFile}) );
+                    res.end(JSON.stringify({ "ErrCode": 0, "ErrInfo": "SUCCESS", "PDFPath": pdfFile }));
                     res = null;
                 }
-                catch{
+                catch {
                     let _ = [];
-                    let p = path.join(__dirname,"fail.json");
-                    fs.existsSync(p) && (_ = JSON.parse(fs.readFileSync(p,{encoding:"utf-8"})));
-                    _.push({WebURL,pdfFile});
-                    fs.writeFileSync(p,JSON.stringify(_));
+                    let p = path.join(__dirname, "fail.json");
+                    fs.existsSync(p) && (_ = JSON.parse(fs.readFileSync(p, { encoding: "utf-8" })));
+                    _.push({ WebURL, pdfFile });
+                    fs.writeFileSync(p, JSON.stringify(_));
                 }
                 addCount();
             } catch (error) {
                 logger.error(error);
             }
-            finally{
+            finally {
                 finishHandle && clearTimeout(finishHandle);
 
                 res && res.set('Content-Type', 'application/json; charset=UTF-8');
-                res && res.end( JSON.stringify({"ErrCode":-1000,"ErrInfo":"","PDFPath":""}) );
+                res && res.end(JSON.stringify({ "ErrCode": -1000, "ErrInfo": "", "PDFPath": "" }));
 
                 win && !win.isDestroyed() && win.webContents.isDevToolsOpened() && win.webContents.closeDevTools();
                 win && !win.isDestroyed() && win.close();
 
-                if(queueTasks.length > 0)
-                {
+                if (queueTasks.length > 0) {
                     let item = queueTasks.shift();
                     logger.info(`开始处理任务 ${item.WebURL} ... | 当前现有排队的任务数：${queueTasks.length}`);
-                    setTimeout(printPDF,0,item.WebURL,item.res);
+                    setTimeout(printPDF, 0, item.WebURL, item.res);
                 }
             }
         }
 
-        function printPDF(WebURL,res)
-        {
-            const win = CreateDefaultWin({width:1280,height:720, webPreferences: { offscreen: false,nodeIntegration:false,contextIsolation:true,preload: path.join(__dirname, 'preload.js'), } ,show:false});
+        function printPDF(WebURL, res) {
+            const win = CreateDefaultWin({ width: 1280, height: 720, webPreferences: { offscreen: false, nodeIntegration: false, contextIsolation: true, preload: path.join(__dirname, 'preload.js'), }, show: false });
             win.loadURL(WebURL);
-            const finishHandle = setTimeout(WebContentPrint,30000,WebURL,win.webContents,res);
-            win.webContents.on("ipc-message",async (e,channel,data)=>{
-                if(channel != "NotifyPrint") return;
-                WebContentPrint(WebURL,e.sender,res,finishHandle);
+            const finishHandle = setTimeout(WebContentPrint, 30000, WebURL, win.webContents, res);
+            win.webContents.on("ipc-message", async (e, channel, data) => {
+                if (channel != "NotifyPrint") return;
+                WebContentPrint(WebURL, e.sender, res, finishHandle);
             });
         }
 
-        
+
         // session.defaultSession.webRequest.onBeforeRequest(webRequestReq);
         // session.defaultSession.webRequest.onResponseStarted(webRequestRsp);
         // session.defaultSession.webRequest.onCompleted(webRequestRspCompleted);
@@ -507,42 +496,40 @@ let _cpuUsage;
         app.quit()
     });
 })();
-function addCount(){
+function addCount() {
     pdfCount += 1;
-    if(pdfCountDate == getDate()){
+    if (pdfCountDate == getDate()) {
         pdfCountToday += 1;
     }
-    else{
+    else {
         pdfCountDate = getDate();
         pdfCountToday = 1;
     }
     saveCount();
-    mainWindow && mainWindow.webContents.send("message",{
-        log:`共计生成<strong class="pdfCount">${
-            pdfCount
-        }</strong>| 今日<strong class="pdfCountToday">${pdfCountToday}</strong>份报告`,pdfCount});
+    mainWindow && mainWindow.webContents.send("message", {
+        log: `共计生成<strong class="pdfCount">${pdfCount
+            }</strong>| 今日<strong class="pdfCountToday">${pdfCountToday}</strong>份报告`, pdfCount
+    });
 }
-function saveCount(){
+function saveCount() {
     try {
-        let config = fs.existsSync(localConfig) ? JSON.parse(fs.readFileSync(localConfig)):{};
+        let config = fs.existsSync(localConfig) ? JSON.parse(fs.readFileSync(localConfig)) : {};
         config['pdfCount'] = pdfCount;
         config['pdfCountToday'] = pdfCountToday;
         config['pdfCountDate'] = pdfCountDate;
-        fs.writeFileSync(localConfig,JSON.stringify(config));
+        fs.writeFileSync(localConfig, JSON.stringify(config));
     } catch (error) {
         logger.error(error);
     }
 }
-function getStartParam()
-{
+function getStartParam() {
     let param = {
         port: 8080
     };
     process.argv.forEach(arg => {
         let _ = null;
-        if((_ = arg.match(/^--(.*)=([^=]*)$/)) && _.length > 2)
-        {
-            param[ _[1] ]=_[2];
+        if ((_ = arg.match(/^--(.*)=([^=]*)$/)) && _.length > 2) {
+            param[_[1]] = _[2];
         }
     });
     return param;
@@ -552,7 +539,7 @@ function MergeObject(a, b) {
     let c = JSON.parse(JSON.stringify(a))
     for (const key in b) {
         if (Object.hasOwnProperty.call(b, key)) {
-            c[key] = (typeof b[key] == 'object' && c[key] && typeof c[key] == 'object') ? MergeObject(c[key],b[key]) : b[key]
+            c[key] = (typeof b[key] == 'object' && c[key] && typeof c[key] == 'object') ? MergeObject(c[key], b[key]) : b[key]
         }
     }
     return c;
@@ -570,13 +557,13 @@ function CreateDefaultWin(options) {
             nodeIntegration: true,
             spellcheck: false,
             webSecurity: !isDev,
-            contextIsolation:false,
+            contextIsolation: false,
         },
         alwaysOnTop: false,
         hasShadow: false,
     };
     if (options) {
-        opt = MergeObject(opt,options)
+        opt = MergeObject(opt, options)
     }
     let win = new BrowserWindow(opt);
     win.setMenu(null);

@@ -1,10 +1,10 @@
 {
   "name": "url2pdf",
-  "version": "2.1.3",
+  "version": "2.1.4",
   "description": "url / html convert pdf file",
   "main": "main.js",
   "devDependencies": {
-    "electron": "^16.0.2",
+    "electron": "^22.3.23",
     "electron-builder": "^22.14.5"
   },
   "dependencies": {
@@ -29,8 +29,8 @@
   "build": {
     "appId": "cn.heisir.url2pdf",
     "artifactName": "URL2PDF-${os}_${arch}-v${version}.${ext}",
-    "electronVersion": "16.0.2",
-    "copyright": "Copyright © 2021 ${author}",
+    "electronVersion": "22.3.23",
+    "copyright": "Copyright © 2023 ${author}",
     "compression": "normal",
     "directories": {
       "output": "dist"
@@ -57,7 +57,7 @@
         }
       ],
       "icon": "static/icon/logo-512.png",
-      "requestedExecutionLevel":"requireAdministrator"
+      "requestedExecutionLevel": "requireAdministrator"
     },
     "dmg": {
       "window": {

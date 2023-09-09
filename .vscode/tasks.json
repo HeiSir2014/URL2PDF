@@ -1,0 +1,12 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"type": "npm",
+			"script": "pack-win",
+			"problemMatcher": [],
+			"label": "npm: pack-win",
+			"detail": "electron-builder --win --publish always"
+		}
+	]
+}

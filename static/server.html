@@ -1,14 +1,16 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>URL2PDF 服务</title>
     <style>
-        html,body{
+        html,
+        body {
             width: 100%;
             height: 100%;
-            background-color:#fff;
+            background-color: #fff;
             color: #000;
             margin: 0;
             padding: 0;
@@ -17,7 +19,7 @@
             font-family: Arial, Helvetica, sans-serif;
         }
 
-        div{
+        div {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
@@ -25,7 +27,7 @@
 
 
 
-        .line{
+        .line {
             width: 100%;
             height: 32px;
             line-height: 32px;
@@ -35,53 +37,57 @@
             vertical-align: middle;
         }
 
-        .line input,.line button{
+        .line input,
+        .line button {
             outline: none;
         }
-        .line button{
+
+        .line button {
             width: 120px;
             height: 100%;
         }
 
-        .line button.start{
+        .line button.start {
             background-color: rgb(230, 64, 34);
             border: solid 0px #aaa;
             border-radius: 5px;
             color: #fff;
         }
-        .line button.stop{
+
+        .line button.stop {
             background-color: rgb(32, 122, 240);
             border: solid 0px #aaa;
             border-radius: 5px;
             color: #fff;
         }
 
-        .line button.start:disabled{
+        .line button.start:disabled {
             background-color: rgb(255, 190, 179);
         }
-        .line button.stop:disabled{
+
+        .line button.stop:disabled {
             background-color: rgb(163, 203, 255);
         }
 
-        .line button+button{
+        .line button+button {
             margin-right: 20px;
         }
 
-        .line button:first-child{
+        .line button:first-child {
             /* margin-left: 40px; */
         }
 
-        .line button.dir{
+        .line button.dir {
             width: 120px;
             background-color: transparent;
             border: solid 1px #aaa;
         }
 
-        .line button.dir:hover{
+        .line button.dir:hover {
             background-color: #00000011;
         }
 
-        .line .port{
+        .line .port {
             height: 100%;
             line-height: 32px;
             width: 50%;
@@ -89,39 +95,41 @@
             text-align: center;
         }
 
-        .line.status,.line.log{
+        .line.status,
+        .line.log {
             text-align: center;
             font-size: 14px;
         }
 
-        .line.log{
+        .line.log {
             color: #00af74;
             height: fit-content;
             margin: 40px auto;
         }
 
-        .line.log .pdfCount{
+        .line.log .pdfCount {
             color: #ff864d;
             font-size: 48px;
             margin: 0 10px;
             text-shadow: 2px 1px #9b9b9b;
         }
-        .line.log .pdfCountToday{
+
+        .line.log .pdfCountToday {
             color: #0aa5ff;
             font-size: 96px;
             margin: 0 15px;
             text-shadow: 2px 1px #c2c2c2;
         }
 
-        .main{
+        .main {
             position: relative;
             padding: 5px 20px;
             width: 100%;
             height: 100%;
         }
 
-        .line.tip{
-            position:absolute;
+        .line.tip {
+            position: absolute;
             bottom: 10px;
             left: 0;
             right: 0;
@@ -132,7 +140,7 @@
             line-height: 24px;
         }
 
-        .timeout{
+        .timeout {
             display: inline-block;
             padding: 2px 15px;
             background-color: #0076dd;
@@ -140,8 +148,12 @@
             margin-left: 10px;
             border-radius: 25px;
         }
+        .scale{
+            width: 50px;
+        }
     </style>
 </head>
+
 <body>
     <div class="main">
         <div class="line" style="
@@ -159,23 +171,27 @@
             <input type="number" class="port" value="8080" />
         </div>
         <div class="line">
-            <button class="start">开始</button>  
+            <button class="start">开始</button>
             <button class="stop" disabled>停止</button>
+            <label>打印缩放（0-100）</label>
+            <input type="number" class="scale" value="100" />
         </div>
         <div class="line status">服务未启动</div>
         <div class="line log">共计：已生成 0 个PDF</div>
-        
+
         <div class="line">
             <button class="dir openPdf">打开PDF目录</button>
-            <button class="dir openLog">打开日志目录</button>  
-            <input type="checkbox" class="dir restart">定时重启</button>  
+            <button class="dir openLog">打开日志目录</button>
+            <input type="checkbox" class="dir restart">定时重启</button>
         </div>
-        <div class="line tip">窗口关闭后，会自动隐藏到系统托盘中<div class="timeout"></div></div>
+        <div class="line tip">窗口关闭后，会自动隐藏到系统托盘中<div class="timeout"></div>
+        </div>
     </div>
 
     <script>
         const { ipcRenderer } = require('electron');
         const portInput = document.querySelector('.port');
+        const scaleInput = document.querySelector('.scale');
         const start = document.querySelector('.start');
         const stop = document.querySelector('.stop');
         const openPdf = document.querySelector('.openPdf');
@@ -187,59 +203,59 @@
         let restartTime = null;
         let startClickTime = null;
 
-        ipcRenderer.on("message",function(e,{port,log,status,success,fail,restart}){
+        ipcRenderer.on("message", function (e, { port, log, status, success, fail, restart }) {
             port && (portInput.value = port);
             log && (logDiv.innerHTML = log);
             status && (statusDiv.innerHTML = status);
             success && (stop.disabled = false)
             fail && (start.disabled = false)
-            restart && (restartBtn.checked = true,restart_())
+            restart && (restartBtn.checked = true, restart_())
         });
 
-        start.onclick = function(){
+        start.onclick = function () {
 
-            ipcRenderer.send("start",{port:portInput.value})
+            ipcRenderer.send("start", { port: portInput.value, scale: scaleInput.value })
 
             start.disabled = true;
             stop.disabled = true;
         }
 
-        stop.onclick = function(){
+        stop.onclick = function () {
 
             ipcRenderer.send("stop")
 
             start.disabled = false;
             stop.disabled = true;
         }
-        openPdf.onclick = function(){
+        openPdf.onclick = function () {
             ipcRenderer.send("openPDF");
         }
-        openLog.onclick = function(){
+        openLog.onclick = function () {
             ipcRenderer.send("openLog");
         }
 
-        function restart_(){
-            if(restartTime) clearInterval(restartTime),restartTime = null;
-            if( restartBtn.checked ){
+        function restart_() {
+            if (restartTime) clearInterval(restartTime), restartTime = null;
+            if (restartBtn.checked) {
                 startClickTime = Date.now();
-                restartTime = setInterval(()=>{
-                    timeoutDiv.innerHTML = `${ Math.floor(12*3600 - (Date.now() - startClickTime)/1000)} 秒后重启服务`;
-                    if((Date.now() - startClickTime)/1000 >= 12*3600)
-                    {
+                restartTime = setInterval(() => {
+                    timeoutDiv.innerHTML = `${Math.floor(12 * 3600 - (Date.now() - startClickTime) / 1000)} 秒后重启服务`;
+                    if ((Date.now() - startClickTime) / 1000 >= 12 * 3600) {
                         ipcRenderer.send("restart");
-                        clearInterval(restartTime),restartTime = null;
+                        clearInterval(restartTime), restartTime = null;
                     }
-                },1000);
+                }, 1000);
             }
-            else{
+            else {
                 timeoutDiv.innerHTML = ``;
             }
-            ipcRenderer.send("set-restart",restartBtn.checked);
+            ipcRenderer.send("set-restart", restartBtn.checked);
         }
 
         restartBtn.onclick = restart_;
 
-        setTimeout(()=>start.click(),1000)
+        setTimeout(() => start.click(), 1000)
     </script>
 </body>
+
 </html>
