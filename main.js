@@ -98,8 +98,8 @@ let _cpuUsage;
 
         mainWindow = CreateDefaultWin({ width: 600, height: 480, frame: true, resizable: true })
         mainWindow.loadFile(path.join("static", "server.html"));
-        mainWindow.webContents.on("dom-ready", () => {
-            let prints = mainWindow.webContents.getPrinters();
+        mainWindow.webContents.on("dom-ready", async () => {
+            let prints = await mainWindow.webContents.getPrintersAsync();
             logger.info(JSON.stringify(prints));
             if (fs.existsSync(localConfig)) {
                 const config = JSON.parse(fs.readFileSync(localConfig))
