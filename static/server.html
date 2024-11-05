@@ -141,12 +141,12 @@
         }
 
         .timeout {
-            display: inline-block;
+            display: none;
             padding: 2px 15px;
             background-color: #0076dd;
             color: #fff;
-            margin-left: 10px;
-            border-radius: 25px;
+            margin-left: 5px;
+            border-radius: 10px;
         }
         .scale{
             width: 50px;
@@ -239,7 +239,8 @@
             if (restartBtn.checked) {
                 startClickTime = Date.now();
                 restartTime = setInterval(() => {
-                    timeoutDiv.innerHTML = `${Math.floor(12 * 3600 - (Date.now() - startClickTime) / 1000)} 秒后重启服务`;
+                    timeoutDiv.style.display = 'inline-block';
+                    timeoutDiv.innerHTML = `${Math.floor((12 * 3600 - (Date.now() - startClickTime) / 1000) / 60)} 分钟后重启服务`;
                     if ((Date.now() - startClickTime) / 1000 >= 12 * 3600) {
                         ipcRenderer.send("restart");
                         clearInterval(restartTime), restartTime = null;
@@ -247,6 +248,7 @@
                 }, 1000);
             }
             else {
+                timeoutDiv.style.display = 'none';
                 timeoutDiv.innerHTML = ``;
             }
             ipcRenderer.send("set-restart", restartBtn.checked);

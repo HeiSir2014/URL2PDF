@@ -4,8 +4,8 @@
   "description": "url / html convert pdf file",
   "main": "main.js",
   "devDependencies": {
-    "electron": "^22.3.23",
-    "electron-builder": "^22.14.5"
+    "electron": "^33.0.2",
+    "electron-builder": "^25.1.8"
   },
   "dependencies": {
     "body-parser": "^1.19.0",
@@ -29,7 +29,7 @@
   "build": {
     "appId": "cn.heisir.url2pdf",
     "artifactName": "URL2PDF-${os}_${arch}-v${version}.${ext}",
-    "electronVersion": "22.3.23",
+    "electronVersion": "33.0.2",
     "copyright": "Copyright © 2023 ${author}",
     "compression": "normal",
     "directories": {

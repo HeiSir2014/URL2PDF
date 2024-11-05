@@ -345,7 +345,7 @@ let _cpuUsage;
         tray.setContextMenu(contextMenu);
 
         async function apiHandle(req, res) {
-            let WebURL = req.url.replace(/^.*WebURL=/g,'') || req.query['WebURL'];
+            let WebURL = (/WebURL=/g.test(req.url) && req.url.replace(/^.*WebURL=/g,'')) || req.query['WebURL'];
             if (!WebURL) {
                 WebURL = req.body.WebURL;
                 if (!WebURL) {
